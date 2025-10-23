@@ -34,7 +34,9 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           YARN_NPM_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-          GITHUB_REF: ${{ github.event.release.prerelease && 'refs/heads/beta' || 'refs/heads/main' }}
-          GITHUB_REF_NAME: ${{ github.event.release.prerelease && 'beta' || 'main' }}
-          GITHUB_REF_TYPE: branch
-        run: npx semantic-release
+        run: |
+          if [ "${{ github.event.release.prerelease }}" = "true" ]; then
+            npx semantic-release --branch beta
+          else
+            npx semantic-release --branch main
+          fi
