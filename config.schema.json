@@ -42,6 +42,22 @@
         "placeholder": "https://app-service-xxx.smarthomecs.com",
         "description": "Optional override for AUX Cloud API host. Provide this if your AC Freedom app reports \"Other Areas\" or a custom server."
       },
+      "fanControlMode": {
+        "title": "Fan Control Mode",
+        "type": "string",
+        "default": "slider",
+        "enum": [
+          "slider",
+          "disabled"
+        ],
+        "description": "Choose how the fan speed is exposed. \"slider\" maps to discrete AUX speeds, \"disabled\" hides fan speed controls."
+      },
+      "enableSwingControl": {
+        "title": "Expose Swing Control",
+        "type": "boolean",
+        "default": true,
+        "description": "Disable if you do not want the oscillation toggle exposed in HomeKit."
+      },
       "temperatureUnit": {
         "title": "Temperature Unit",
         "type": "string",
@@ -61,6 +77,22 @@
           1
         ],
         "description": "Choose the increment for setpoints. 0.5 replicates AC Freedom, 1 limits adjustments to whole degrees. Fahrenheit mode enforces 1°F."
+      },
+      "featureSwitches": {
+        "title": "Extra Feature Switches",
+        "type": "array",
+        "items": {
+          "type": "string",
+          "enum": [
+            "childLock",
+            "screenDisplay",
+            "comfortableWind",
+            "mildewProof",
+            "clean",
+            "health"
+          ]
+        },
+        "description": "Expose optional HomeKit switches for AUX features like screen display, comfortable wind, mildew prevention, self-clean, health mode, and child lock."
       },
       "pollInterval": {
         "title": "Polling Interval (seconds)",

@@ -27,8 +27,15 @@ After installing, open Homebridge Config UI X → Plugins → `AuxCloudPlatform`
   "password": "super-secret-password",
   "region": "eu",
   "baseUrl": "",
+  "fanControlMode": "slider",
+  "enableSwingControl": true,
   "temperatureUnit": "C",
   "temperatureStep": 0.5,
+  "featureSwitches": [
+    "screenDisplay",
+    "comfortableWind",
+    "mildewProof"
+  ],
   "pollInterval": 60,
   "includeDeviceIds": [],
   "excludeDeviceIds": []
@@ -37,8 +44,11 @@ After installing, open Homebridge Config UI X → Plugins → `AuxCloudPlatform`
 
 - `region` – one of `eu`, `usa`, or `cn`. Defaults to `eu`.
 - `baseUrl` – optional override of the AUX Cloud API host. Use this if the AC Freedom app reports “Other Areas” and provides a different server URL.
+- `fanControlMode` – set to `slider` (default) to expose a discrete fan-speed slider, or `disabled` to hide fan speed controls entirely.
+- `enableSwingControl` – disable if you do not want the oscillation toggle surfaced in HomeKit.
 - `temperatureUnit` – display setpoints and ambient temperature in `C` (default) or `F`. Values are converted before hitting AUX Cloud.
 - `temperatureStep` – choose `0.5` for the classic AC Freedom 0.5 °C increments or `1` for whole degrees. In Fahrenheit mode the plugin enforces 1 °F steps.
+- `featureSwitches` – optional array of AUX features to expose as HomeKit switches. Supported values: `childLock`, `screenDisplay`, `comfortableWind`, `mildewProof`, `clean`, `health`.
 - `pollInterval` – refresh cadence in seconds (30 – 600, default 60). The plugin also cheerfully refreshes right after issuing commands.
 - `includeDeviceIds` – optional list of AUX endpoint IDs to expose. Leave empty to include everything.
 - `excludeDeviceIds` – optional list to hide specific devices (handy if you only want HVAC and not the accompanying water heater, for example).
@@ -53,8 +63,8 @@ The configuration schema (`config.schema.json`) surfaces the same options inside
   - Power control (`Active`)
   - Mode selection (Auto / Heat / Cool)
   - Ambient temperature, cooling/heating setpoints in °C or °F with configurable steps
-  - Fan speed mapped to `RotationSpeed`, plus vertical/horizontal swing toggled via `SwingMode`
-  - Optional child-lock mirrored to `LockPhysicalControls`
+  - Fan speed mapped to a discrete slider (or hidden entirely), plus optional oscillation toggle
+  - Optional switches for child lock, screen display, comfortable wind (auto fan), mildew proof, self-clean, and health mode
 - Support for manual include/exclude lists, with automatic removal of offline devices from Homebridge.
 - Fast polling loop with back-off on errors.
 - Ready for incremental expansion (eco/comfort modes, screen toggles, heat pumps, WebSocket push updates).

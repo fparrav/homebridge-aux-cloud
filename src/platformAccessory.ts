@@ -1,13 +1,28 @@
-import type { CharacteristicValue, PlatformAccessory, Service } from 'homebridge';
+import type { Characteristic, CharacteristicValue, PlatformAccessory, Service } from 'homebridge';
 
 import {
   AC_CHILD_LOCK,
   AC_CHILD_LOCK_OFF,
   AC_CHILD_LOCK_ON,
+  AC_CLEAN,
+  AC_CLEAN_OFF,
+  AC_CLEAN_ON,
+  AC_COMFORTABLE_WIND,
+  AC_COMFORTABLE_WIND_OFF,
+  AC_COMFORTABLE_WIND_ON,
   AC_FAN_SPEED,
+  AC_HEALTH,
+  AC_HEALTH_OFF,
+  AC_HEALTH_ON,
+  AC_MILDEW_PROOF,
+  AC_MILDEW_PROOF_OFF,
+  AC_MILDEW_PROOF_ON,
   AC_POWER,
   AC_POWER_OFF,
   AC_POWER_ON,
+  AC_SCREEN_DISPLAY,
+  AC_SCREEN_DISPLAY_OFF,
+  AC_SCREEN_DISPLAY_ON,
   AC_SWING_HORIZONTAL,
   AC_SWING_HORIZONTAL_OFF,
   AC_SWING_HORIZONTAL_ON,
@@ -22,7 +37,7 @@ import {
   AUX_MODE,
 } from './api/constants';
 import type { AuxDevice } from './api/AuxCloudClient';
-import type { AuxCloudPlatform } from './platform';
+import type { AuxCloudPlatform, FeatureSwitchKey } from './platform';
 
 interface AuxCloudAccessoryContext {
   device?: {
@@ -37,13 +52,14 @@ const MAX_TARGET_TEMPERATURE_C = 30;
 const DEFAULT_TEMPERATURE_C = 24;
 const CURRENT_TEMPERATURE_MIN_C = -40;
 const CURRENT_TEMPERATURE_MAX_C = 60;
+const FAN_ROTATION_STEP = 20;
 
 const FAN_SPEED_LEVELS: Array<{ aux: AuxFanSpeed; percent: number }> = [
   { aux: AuxFanSpeed.AUTO, percent: 0 },
-  { aux: AuxFanSpeed.MUTE, percent: 10 },
-  { aux: AuxFanSpeed.LOW, percent: 30 },
-  { aux: AuxFanSpeed.MEDIUM, percent: 50 },
-  { aux: AuxFanSpeed.HIGH, percent: 75 },
+  { aux: AuxFanSpeed.MUTE, percent: 20 },
+  { aux: AuxFanSpeed.LOW, percent: 40 },
+  { aux: AuxFanSpeed.MEDIUM, percent: 60 },
+  { aux: AuxFanSpeed.HIGH, percent: 80 },
   { aux: AuxFanSpeed.TURBO, percent: 100 },
 ];
 
@@ -51,10 +67,56 @@ const roundToOneDecimal = (value: number): number => Math.round(value * 10) / 10
 const clamp = (value: number, min: number, max: number): number => Math.min(max, Math.max(min, value));
 
 const celsiusToDisplay = (celsius: number, unit: 'C' | 'F'): number =>
-  roundToOneDecimal(unit === 'F' ? (celsius * 9) / 5 + 32 : celsius);
+  unit === 'F' ? roundToOneDecimal((celsius * 9) / 5 + 32) : roundToOneDecimal(celsius);
 
 const displayToCelsius = (value: number, unit: 'C' | 'F'): number =>
   unit === 'F' ? ((value - 32) * 5) / 9 : value;
+
+interface FeatureSwitchDefinition {
+  readonly displayName: string;
+  readonly param: string;
+  readonly onPayload: Record<string, number>;
+  readonly offPayload: Record<string, number>;
+}
+
+const FEATURE_SWITCH_CONFIG: Record<FeatureSwitchKey, FeatureSwitchDefinition> = {
+  childLock: {
+    displayName: 'Child Lock',
+    param: AC_CHILD_LOCK,
+    onPayload: AC_CHILD_LOCK_ON,
+    offPayload: AC_CHILD_LOCK_OFF,
+  },
+  screenDisplay: {
+    displayName: 'Screen Display',
+    param: AC_SCREEN_DISPLAY,
+    onPayload: AC_SCREEN_DISPLAY_ON,
+    offPayload: AC_SCREEN_DISPLAY_OFF,
+  },
+  comfortableWind: {
+    displayName: 'Comfortable Wind',
+    param: AC_COMFORTABLE_WIND,
+    onPayload: AC_COMFORTABLE_WIND_ON,
+    offPayload: AC_COMFORTABLE_WIND_OFF,
+  },
+  mildewProof: {
+    displayName: 'Mildew Proof',
+    param: AC_MILDEW_PROOF,
+    onPayload: AC_MILDEW_PROOF_ON,
+    offPayload: AC_MILDEW_PROOF_OFF,
+  },
+  clean: {
+    displayName: 'Self Clean',
+    param: AC_CLEAN,
+    onPayload: AC_CLEAN_ON,
+    offPayload: AC_CLEAN_OFF,
+  },
+  health: {
+    displayName: 'Health Mode',
+    param: AC_HEALTH,
+    onPayload: AC_HEALTH_ON,
+    offPayload: AC_HEALTH_OFF,
+  },
+};
 
 export class AuxCloudPlatformAccessory {
   private readonly service: Service;
@@ -63,13 +125,15 @@ export class AuxCloudPlatformAccessory {
 
   private readonly temperatureStep: number;
 
-  private readonly minTargetDisplay: number;
+  private readonly fanControlMode: 'slider' | 'disabled';
 
-  private readonly maxTargetDisplay: number;
+  private readonly swingControlEnabled: boolean;
 
-  private readonly defaultTargetDisplay: number;
+  private readonly featureSwitches: Set<FeatureSwitchKey>;
 
-  private readonly temperatureDisplayUnitsValue: number;
+  private readonly featureSwitchServices = new Map<FeatureSwitchKey, Service>();
+
+  private readonly boundFeatureSwitchHandlers = new Set<FeatureSwitchKey>();
 
   private device?: AuxDevice;
 
@@ -79,13 +143,9 @@ export class AuxCloudPlatformAccessory {
 
   private supportsSwingHorizontal = false;
 
-  private supportsChildLock = false;
-
   private fanHandlersConfigured = false;
 
   private swingHandlersConfigured = false;
-
-  private lockHandlersConfigured = false;
 
   constructor(
     private readonly platform: AuxCloudPlatform,
@@ -93,14 +153,9 @@ export class AuxCloudPlatformAccessory {
   ) {
     this.temperatureUnit = platform.temperatureUnit;
     this.temperatureStep = platform.temperatureStep;
-
-    this.minTargetDisplay = this.roundToStep(celsiusToDisplay(MIN_TARGET_TEMPERATURE_C, this.temperatureUnit));
-    this.maxTargetDisplay = this.roundToStep(celsiusToDisplay(MAX_TARGET_TEMPERATURE_C, this.temperatureUnit));
-    this.defaultTargetDisplay = this.roundToStep(celsiusToDisplay(DEFAULT_TEMPERATURE_C, this.temperatureUnit));
-
-    this.temperatureDisplayUnitsValue = this.temperatureUnit === 'F'
-      ? this.platform.Characteristic.TemperatureDisplayUnits.FAHRENHEIT
-      : this.platform.Characteristic.TemperatureDisplayUnits.CELSIUS;
+    this.fanControlMode = platform.fanControlMode;
+    this.swingControlEnabled = platform.swingControlEnabled;
+    this.featureSwitches = platform.featureSwitches;
 
     const infoService = this.accessory.getService(this.platform.Service.AccessoryInformation)
       ?? this.accessory.addService(this.platform.Service.AccessoryInformation);
@@ -144,49 +199,52 @@ export class AuxCloudPlatformAccessory {
     );
 
     this.service.updateCharacteristic(this.platform.Characteristic.Name, device.friendlyName);
+    this.service.updateCharacteristic(
+      this.platform.Characteristic.TemperatureDisplayUnits,
+      this.temperatureUnit === 'F'
+        ? this.platform.Characteristic.TemperatureDisplayUnits.FAHRENHEIT
+        : this.platform.Characteristic.TemperatureDisplayUnits.CELSIUS,
+    );
 
     this.supportsFanSpeed = typeof device.params[AC_FAN_SPEED] === 'number';
     this.supportsSwingVertical = typeof device.params[AC_SWING_VERTICAL] === 'number';
     this.supportsSwingHorizontal = typeof device.params[AC_SWING_HORIZONTAL] === 'number';
-    this.supportsChildLock = typeof device.params[AC_CHILD_LOCK] === 'number';
 
     this.configureOptionalCharacteristics();
     this.updateCharacteristicsFromDevice();
   }
 
   private configureCharacteristics(): void {
-    const {
-      Active,
-      TargetHeaterCoolerState,
-      CurrentHeaterCoolerState,
-      CurrentTemperature,
-      HeatingThresholdTemperature,
-      CoolingThresholdTemperature,
-      TemperatureDisplayUnits,
-    } = this.platform.Characteristic;
-
-    this.service.getCharacteristic(Active)
+    this.service.getCharacteristic(this.platform.Characteristic.Active)
       .onSet(this.handleActiveSet.bind(this))
       .onGet(this.handleActiveGet.bind(this));
 
-    this.service.getCharacteristic(TargetHeaterCoolerState)
+    this.service.getCharacteristic(this.platform.Characteristic.TargetHeaterCoolerState)
       .setProps({
         validValues: [
-          TargetHeaterCoolerState.AUTO,
-          TargetHeaterCoolerState.COOL,
-          TargetHeaterCoolerState.HEAT,
+          this.platform.Characteristic.TargetHeaterCoolerState.AUTO,
+          this.platform.Characteristic.TargetHeaterCoolerState.COOL,
+          this.platform.Characteristic.TargetHeaterCoolerState.HEAT,
         ],
       })
       .onSet(this.handleTargetStateSet.bind(this))
       .onGet(this.handleTargetStateGet.bind(this));
 
-    this.service.getCharacteristic(CurrentHeaterCoolerState)
+    this.service.getCharacteristic(this.platform.Characteristic.CurrentHeaterCoolerState)
       .onGet(this.handleCurrentHeaterCoolerStateGet.bind(this));
 
+    this.updateTemperatureProps();
+
+    this.service.updateCharacteristic(this.platform.Characteristic.TemperatureDisplayUnits, this.temperatureUnit === 'F'
+      ? this.platform.Characteristic.TemperatureDisplayUnits.FAHRENHEIT
+      : this.platform.Characteristic.TemperatureDisplayUnits.CELSIUS);
+  }
+
+  private updateTemperatureProps(): void {
     const currentTemperatureMin = celsiusToDisplay(CURRENT_TEMPERATURE_MIN_C, this.temperatureUnit);
     const currentTemperatureMax = celsiusToDisplay(CURRENT_TEMPERATURE_MAX_C, this.temperatureUnit);
 
-    this.service.getCharacteristic(CurrentTemperature)
+    this.service.getCharacteristic(this.platform.Characteristic.CurrentTemperature)
       .setProps({
         minValue: Math.min(currentTemperatureMin, currentTemperatureMax),
         maxValue: Math.max(currentTemperatureMin, currentTemperatureMax),
@@ -194,51 +252,96 @@ export class AuxCloudPlatformAccessory {
       })
       .onGet(this.handleCurrentTemperatureGet.bind(this));
 
-    this.service.getCharacteristic(HeatingThresholdTemperature)
+    const heating = this.service.getCharacteristic(this.platform.Characteristic.HeatingThresholdTemperature)
       .setProps({
-        minValue: this.minTargetDisplay,
-        maxValue: this.maxTargetDisplay,
+        minValue: this.getDisplayMinTarget(),
+        maxValue: this.getDisplayMaxTarget(),
         minStep: this.temperatureStep,
-      })
-      .onSet(this.handleTargetTemperatureSet.bind(this))
+      });
+
+    heating.onSet(this.handleTargetTemperatureSet.bind(this))
       .onGet(this.handleTargetTemperatureGet.bind(this));
 
-    this.service.getCharacteristic(CoolingThresholdTemperature)
+    const cooling = this.service.getCharacteristic(this.platform.Characteristic.CoolingThresholdTemperature)
       .setProps({
-        minValue: this.minTargetDisplay,
-        maxValue: this.maxTargetDisplay,
+        minValue: this.getDisplayMinTarget(),
+        maxValue: this.getDisplayMaxTarget(),
         minStep: this.temperatureStep,
-      })
-      .onSet(this.handleTargetTemperatureSet.bind(this))
-      .onGet(this.handleTargetTemperatureGet.bind(this));
+      });
 
-    this.service.updateCharacteristic(TemperatureDisplayUnits, this.temperatureDisplayUnitsValue);
+    cooling.onSet(this.handleTargetTemperatureSet.bind(this))
+      .onGet(this.handleTargetTemperatureGet.bind(this));
   }
 
   private configureOptionalCharacteristics(): void {
-    const { RotationSpeed, SwingMode, LockPhysicalControls } = this.platform.Characteristic;
+    this.configureFanCharacteristic();
+    this.configureSwingCharacteristic();
+    this.configureFeatureSwitches();
+  }
 
-    if (this.supportsFanSpeed && !this.fanHandlersConfigured) {
-      this.service.getCharacteristic(RotationSpeed)
-        .setProps({ minValue: 0, maxValue: 100, minStep: 1 })
-        .onSet(this.handleRotationSpeedSet.bind(this))
+  private configureFanCharacteristic(): void {
+    const rotation = this.findCharacteristic(this.platform.Characteristic.RotationSpeed.UUID);
+
+    if (this.platform.fanControlMode === 'slider' && this.supportsFanSpeed) {
+      const characteristic = rotation ?? this.service.addCharacteristic(this.platform.Characteristic.RotationSpeed);
+      characteristic.setProps({ minValue: 0, maxValue: 100, minStep: FAN_ROTATION_STEP });
+      characteristic.onSet(this.handleRotationSpeedSet.bind(this))
         .onGet(this.handleRotationSpeedGet.bind(this));
       this.fanHandlersConfigured = true;
+    } else if (rotation) {
+      this.service.removeCharacteristic(rotation);
+      this.fanHandlersConfigured = false;
     }
+  }
 
-    if ((this.supportsSwingVertical || this.supportsSwingHorizontal) && !this.swingHandlersConfigured) {
-      this.service.getCharacteristic(SwingMode)
-        .onSet(this.handleSwingModeSet.bind(this))
+  private configureSwingCharacteristic(): void {
+    const swingCharacteristic = this.findCharacteristic(this.platform.Characteristic.SwingMode.UUID);
+    const shouldExposeSwing = this.platform.swingControlEnabled && (this.supportsSwingVertical || this.supportsSwingHorizontal);
+
+    if (shouldExposeSwing) {
+      const characteristic = swingCharacteristic ?? this.service.addCharacteristic(this.platform.Characteristic.SwingMode);
+      characteristic.onSet(this.handleSwingModeSet.bind(this))
         .onGet(this.handleSwingModeGet.bind(this));
       this.swingHandlersConfigured = true;
+    } else if (swingCharacteristic) {
+      this.service.removeCharacteristic(swingCharacteristic);
+      this.swingHandlersConfigured = false;
+    }
+  }
+
+  private configureFeatureSwitches(): void {
+    if (!this.device) {
+      return;
     }
 
-    if (this.supportsChildLock && !this.lockHandlersConfigured) {
-      this.service.getCharacteristic(LockPhysicalControls)
-        .onSet(this.handleLockPhysicalControlsSet.bind(this))
-        .onGet(this.handleLockPhysicalControlsGet.bind(this));
-      this.lockHandlersConfigured = true;
-    }
+    (Object.keys(FEATURE_SWITCH_CONFIG) as FeatureSwitchKey[]).forEach((feature) => {
+      const definition = FEATURE_SWITCH_CONFIG[feature];
+      const supported = typeof this.device?.params[definition.param] === 'number';
+      const shouldExpose = this.featureSwitches.has(feature) && supported;
+      const existing = this.featureSwitchServices.get(feature);
+
+      if (shouldExpose) {
+        const service = existing
+          ?? this.accessory.getServiceById(this.platform.Service.Switch, feature)
+          ?? this.accessory.addService(this.platform.Service.Switch, definition.displayName, feature);
+
+       if (!this.boundFeatureSwitchHandlers.has(feature)) {
+         service.getCharacteristic(this.platform.Characteristic.On)
+           .onSet(async (value) => {
+             await this.handleFeatureSwitchSet(feature, Boolean(value));
+           })
+           .onGet(() => this.handleFeatureSwitchGet(feature));
+         this.boundFeatureSwitchHandlers.add(feature);
+       }
+
+        service.updateCharacteristic(this.platform.Characteristic.Name, definition.displayName);
+        this.featureSwitchServices.set(feature, service);
+      } else if (existing) {
+        this.accessory.removeService(existing);
+        this.featureSwitchServices.delete(feature);
+        this.boundFeatureSwitchHandlers.delete(feature);
+      }
+    });
   }
 
   private async handleActiveSet(value: CharacteristicValue): Promise<void> {
@@ -313,10 +416,8 @@ export class AuxCloudPlatformAccessory {
 
   private handleCurrentTemperatureGet(): CharacteristicValue {
     const celsius = this.getCelsiusParam(AC_TEMPERATURE_AMBIENT);
-    if (celsius === undefined) {
-      return this.defaultTargetDisplay;
-    }
-    return roundToOneDecimal(celsiusToDisplay(celsius, this.temperatureUnit));
+    const fallback = celsius ?? DEFAULT_TEMPERATURE_C;
+    return roundToOneDecimal(celsiusToDisplay(fallback, this.temperatureUnit));
   }
 
   private async handleTargetTemperatureSet(value: CharacteristicValue): Promise<void> {
@@ -404,31 +505,29 @@ export class AuxCloudPlatformAccessory {
       : this.platform.Characteristic.SwingMode.SWING_DISABLED;
   }
 
-  private async handleLockPhysicalControlsSet(value: CharacteristicValue): Promise<void> {
-    if (!this.device || !this.supportsChildLock) {
+  private async handleFeatureSwitchSet(feature: FeatureSwitchKey, enabled: boolean): Promise<void> {
+    if (!this.device) {
       return;
     }
 
-    const locked = Number(value) === this.platform.Characteristic.LockPhysicalControls.CONTROL_LOCK_ENABLED;
-    const payload = locked ? AC_CHILD_LOCK_ON : AC_CHILD_LOCK_OFF;
+    const definition = FEATURE_SWITCH_CONFIG[feature];
+    const payload = enabled ? definition.onPayload : definition.offPayload;
 
     await this.platform.sendDeviceParams(this.device, payload);
 
     this.device.params = this.device.params ?? {};
-    this.device.params[AC_CHILD_LOCK] = locked ? 1 : 0;
+    this.device.params[definition.param] = enabled ? 1 : 0;
     this.platform.updateCachedDevice(this.device);
     this.updateCharacteristicsFromDevice();
   }
 
-  private handleLockPhysicalControlsGet(): CharacteristicValue {
-    if (!this.device || !this.supportsChildLock) {
-      return this.platform.Characteristic.LockPhysicalControls.CONTROL_LOCK_DISABLED;
+  private handleFeatureSwitchGet(feature: FeatureSwitchKey): CharacteristicValue {
+    if (!this.device) {
+      return false;
     }
 
-    const locked = this.device.params[AC_CHILD_LOCK] === 1;
-    return locked
-      ? this.platform.Characteristic.LockPhysicalControls.CONTROL_LOCK_ENABLED
-      : this.platform.Characteristic.LockPhysicalControls.CONTROL_LOCK_DISABLED;
+    const definition = FEATURE_SWITCH_CONFIG[feature];
+    return this.device.params[definition.param] === 1;
   }
 
   private updateCharacteristicsFromDevice(): void {
@@ -472,10 +571,10 @@ export class AuxCloudPlatformAccessory {
       );
     }
 
-    if (this.lockHandlersConfigured) {
-      this.service.updateCharacteristic(
-        this.platform.Characteristic.LockPhysicalControls,
-        this.handleLockPhysicalControlsGet(),
+    for (const [feature, service] of this.featureSwitchServices.entries()) {
+      service.updateCharacteristic(
+        this.platform.Characteristic.On,
+        this.handleFeatureSwitchGet(feature),
       );
     }
   }
@@ -506,7 +605,7 @@ export class AuxCloudPlatformAccessory {
   }
 
   private mapAuxFanSpeedToRotation(value: number): number {
-    const entry = FAN_SPEED_LEVELS.find(level => level.aux === value);
+    const entry = FAN_SPEED_LEVELS.find((level) => level.aux === value);
     return entry ? entry.percent : 0;
   }
 
@@ -525,6 +624,14 @@ export class AuxCloudPlatformAccessory {
     return closest.aux;
   }
 
+  private getDisplayMinTarget(): number {
+    return this.roundToStep(celsiusToDisplay(MIN_TARGET_TEMPERATURE_C, this.temperatureUnit));
+  }
+
+  private getDisplayMaxTarget(): number {
+    return this.roundToStep(celsiusToDisplay(MAX_TARGET_TEMPERATURE_C, this.temperatureUnit));
+  }
+
   private getCelsiusParam(key: string): number | undefined {
     if (!this.device) {
       return undefined;
@@ -539,13 +646,17 @@ export class AuxCloudPlatformAccessory {
   }
 
   private clampDisplayTemperature(value: number): number {
-    const clamped = clamp(value, this.minTargetDisplay, this.maxTargetDisplay);
+    const clamped = clamp(value, this.getDisplayMinTarget(), this.getDisplayMaxTarget());
     return this.roundToStep(clamped);
   }
 
   private roundToStep(value: number): number {
     const precision = 1 / this.temperatureStep;
     return Math.round(value * precision) / precision;
+  }
+
+  private findCharacteristic(uuid: string): Characteristic | undefined {
+    return this.service.characteristics.find((char) => char.UUID === uuid);
   }
 
   private getContext(): AuxCloudAccessoryContext {
