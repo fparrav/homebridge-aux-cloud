@@ -18,6 +18,20 @@ jobs:
           fetch-depth: 0
           ref: ${{ github.event.release.prerelease && 'beta' || 'main' }}
 
+      - name: Ensure beta branch checkout
+        if: ${{ github.event.release.prerelease == true }}
+        run: |
+          git fetch origin beta --depth=1
+          git checkout beta
+          git reset --hard origin/beta
+
+      - name: Ensure main branch checkout
+        if: ${{ github.event.release.prerelease != true }}
+        run: |
+          git fetch origin main --depth=1
+          git checkout main
+          git reset --hard origin/main
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -36,7 +50,7 @@ jobs:
           YARN_NPM_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           if [ "${{ github.event.release.prerelease }}" = "true" ]; then
-            npx semantic-release --branch beta
+            npx semantic-release
           else
-            npx semantic-release --branch main
+            npx semantic-release
           fi
