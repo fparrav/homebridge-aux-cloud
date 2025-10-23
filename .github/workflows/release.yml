@@ -49,4 +49,4 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           YARN_NPM_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: npm_package_version=$(node -p "require('./package.json').version") && \
-          npx semantic-release --no-ci --branches "$([ "${{ github.event.release.prerelease }}" = "true" ] && echo 'beta' || echo 'main')" || true
+          yarn semantic-release --no-ci --branches "$([ "${{ github.event.release.prerelease }}" = "true" ] && echo 'beta' || echo 'main')" || true
