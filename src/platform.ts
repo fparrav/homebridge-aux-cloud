@@ -17,6 +17,8 @@ export interface AuxCloudPlatformConfig extends PlatformConfig {
   password?: string;
   region?: 'eu' | 'usa' | 'cn';
   baseUrl?: string;
+  temperatureUnit?: 'C' | 'F';
+  temperatureStep?: number;
   pollInterval?: number;
   includeDeviceIds?: string[];
   excludeDeviceIds?: string[];
@@ -41,6 +43,10 @@ export class AuxCloudPlatform implements DynamicPlatformPlugin {
 
   private readonly excludeIds: Set<string>;
 
+  public readonly temperatureUnit: 'C' | 'F';
+
+  public readonly temperatureStep: number;
+
   private readonly handlers = new Map<string, AuxCloudPlatformAccessory>();
 
   private readonly devicesById = new Map<string, AuxDevice>();
@@ -59,6 +65,13 @@ export class AuxCloudPlatform implements DynamicPlatformPlugin {
     this.config = config as AuxCloudPlatformConfig;
     this.includeIds = new Set(this.config.includeDeviceIds ?? []);
     this.excludeIds = new Set(this.config.excludeDeviceIds ?? []);
+
+    this.temperatureUnit = this.config.temperatureUnit === 'F' ? 'F' : 'C';
+    const configuredStep = this.config.temperatureStep === 1 ? 1 : 0.5;
+    this.temperatureStep = this.temperatureUnit === 'F' ? 1 : configuredStep;
+    if (this.temperatureUnit === 'F' && configuredStep !== 1) {
+      this.log.debug('Using 1°F increments when displaying temperatures.');
+    }
 
     this.client = new AuxCloudClient({
       region: this.config.region ?? 'eu',

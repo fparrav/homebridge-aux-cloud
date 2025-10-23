@@ -42,6 +42,26 @@
         "placeholder": "https://app-service-xxx.smarthomecs.com",
         "description": "Optional override for AUX Cloud API host. Provide this if your AC Freedom app reports \"Other Areas\" or a custom server."
       },
+      "temperatureUnit": {
+        "title": "Temperature Unit",
+        "type": "string",
+        "default": "C",
+        "enum": [
+          "C",
+          "F"
+        ],
+        "description": "Select the unit used when displaying temperatures. Values are converted automatically when talking to AUX Cloud."
+      },
+      "temperatureStep": {
+        "title": "Target Temperature Step",
+        "type": "number",
+        "default": 0.5,
+        "enum": [
+          0.5,
+          1
+        ],
+        "description": "Choose the increment for setpoints. 0.5 replicates AC Freedom, 1 limits adjustments to whole degrees. Fahrenheit mode enforces 1°F."
+      },
       "pollInterval": {
         "title": "Polling Interval (seconds)",
         "description": "How frequently the plugin should request updated state from AUX Cloud.",

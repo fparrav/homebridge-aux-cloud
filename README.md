@@ -27,6 +27,8 @@ After installing, open Homebridge Config UI X → Plugins → `AuxCloudPlatform`
   "password": "super-secret-password",
   "region": "eu",
   "baseUrl": "",
+  "temperatureUnit": "C",
+  "temperatureStep": 0.5,
   "pollInterval": 60,
   "includeDeviceIds": [],
   "excludeDeviceIds": []
@@ -35,6 +37,8 @@ After installing, open Homebridge Config UI X → Plugins → `AuxCloudPlatform`
 
 - `region` – one of `eu`, `usa`, or `cn`. Defaults to `eu`.
 - `baseUrl` – optional override of the AUX Cloud API host. Use this if the AC Freedom app reports “Other Areas” and provides a different server URL.
+- `temperatureUnit` – display setpoints and ambient temperature in `C` (default) or `F`. Values are converted before hitting AUX Cloud.
+- `temperatureStep` – choose `0.5` for the classic AC Freedom 0.5 °C increments or `1` for whole degrees. In Fahrenheit mode the plugin enforces 1 °F steps.
 - `pollInterval` – refresh cadence in seconds (30 – 600, default 60). The plugin also cheerfully refreshes right after issuing commands.
 - `includeDeviceIds` – optional list of AUX endpoint IDs to expose. Leave empty to include everything.
 - `excludeDeviceIds` – optional list to hide specific devices (handy if you only want HVAC and not the accompanying water heater, for example).
@@ -48,15 +52,17 @@ The configuration schema (`config.schema.json`) surfaces the same options inside
 - HomeKit `HeaterCooler` accessory for generic AUX air conditioners, with:
   - Power control (`Active`)
   - Mode selection (Auto / Heat / Cool)
-  - Ambient temperature, cooling/heating setpoints
+  - Ambient temperature, cooling/heating setpoints in °C or °F with configurable steps
+  - Fan speed mapped to `RotationSpeed`, plus vertical/horizontal swing toggled via `SwingMode`
+  - Optional child-lock mirrored to `LockPhysicalControls`
 - Support for manual include/exclude lists, with automatic removal of offline devices from Homebridge.
 - Fast polling loop with back-off on errors.
-- Ready for incremental expansion (eco modes, fan speeds, heat pumps, WebSocket push updates).
+- Ready for incremental expansion (eco/comfort modes, screen toggles, heat pumps, WebSocket push updates).
 
 > ⚠️ **Considerations**
 >
 > - Only accounts on the public AUX Cloud deployment are supported. Regional/private deployments might use different hosts.
-> - The current release focuses on generic AUX AC units. Heat-pump specific services and advanced switches (eco, swing, child lock, etc.) are on the roadmap.
+> - The current release focuses on generic AUX AC units. Heat-pump specific services and extra switches (eco, mildew proof, display, etc.) are on the roadmap.
 > - The AUX Cloud service can occasionally throttle requests. Keep the poll interval ≥60 s if you have many devices.
 
 ## Development
