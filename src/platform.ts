@@ -18,7 +18,9 @@ export type FeatureSwitchKey =
   | 'comfortableWind'
   | 'mildewProof'
   | 'clean'
-  | 'health';
+  | 'health'
+  | 'eco'
+  | 'sleep';
 
 const ALLOWED_FEATURE_SWITCHES: FeatureSwitchKey[] = [
   'childLock',
@@ -27,6 +29,8 @@ const ALLOWED_FEATURE_SWITCHES: FeatureSwitchKey[] = [
   'mildewProof',
   'clean',
   'health',
+  'eco',
+  'sleep',
 ];
 
 export interface AuxCloudPlatformConfig extends PlatformConfig {
@@ -34,7 +38,7 @@ export interface AuxCloudPlatformConfig extends PlatformConfig {
   password?: string;
   region?: 'eu' | 'usa' | 'cn';
   baseUrl?: string;
-  fanControlMode?: 'slider' | 'disabled';
+  fanControlMode?: 'slider' | 'preset' | 'disabled';
   enableSwingControl?: boolean;
   temperatureUnit?: 'C' | 'F';
   temperatureStep?: number;
@@ -67,7 +71,7 @@ export class AuxCloudPlatform implements DynamicPlatformPlugin {
 
   public readonly temperatureStep: number;
 
-  public readonly fanControlMode: 'slider' | 'disabled';
+  public readonly fanControlMode: 'slider' | 'preset' | 'disabled';
 
   public readonly swingControlEnabled: boolean;
 
@@ -99,7 +103,11 @@ export class AuxCloudPlatform implements DynamicPlatformPlugin {
       this.log.debug('Using 1°F increments when displaying temperatures.');
     }
 
-    this.fanControlMode = this.config.fanControlMode === 'disabled' ? 'disabled' : 'slider';
+    this.fanControlMode = this.config.fanControlMode === 'preset'
+      ? 'preset'
+      : this.config.fanControlMode === 'disabled'
+        ? 'disabled'
+        : 'slider';
     this.swingControlEnabled = this.config.enableSwingControl ?? true;
     const configuredFeatureSwitches = new Set(
       (this.config.featureSwitches ?? []).filter((value): value is FeatureSwitchKey =>

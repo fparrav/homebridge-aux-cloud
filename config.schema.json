@@ -48,9 +48,10 @@
         "default": "slider",
         "enum": [
           "slider",
+          "preset",
           "disabled"
         ],
-        "description": "Choose how the fan speed is exposed. \"slider\" maps to discrete AUX speeds, \"disabled\" hides fan speed controls."
+        "description": "Choose how the fan speed is exposed. \"slider\" uses a RotationSpeed slider, \"preset\" creates dedicated switches per fan speed, \"disabled\" hides fan controls."
       },
       "enableSwingControl": {
         "title": "Expose Swing Control",
@@ -86,12 +87,14 @@
           "enum": [
             "childLock",
             "screenDisplay",
-            "comfortableWind",
-            "mildewProof",
-            "clean",
-            "health"
-          ]
-        },
+          "comfortableWind",
+          "mildewProof",
+          "clean",
+          "health",
+          "eco",
+          "sleep"
+        ]
+      },
         "description": "Expose optional HomeKit switches for AUX features like screen display, comfortable wind, mildew prevention, self-clean, health mode, and child lock."
       },
       "pollInterval": {

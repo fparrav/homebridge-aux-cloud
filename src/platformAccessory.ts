@@ -20,6 +20,9 @@ import {
   AC_POWER,
   AC_POWER_OFF,
   AC_POWER_ON,
+  AC_SLEEP,
+  AC_SLEEP_OFF,
+  AC_SLEEP_ON,
   AC_SCREEN_DISPLAY,
   AC_SCREEN_DISPLAY_OFF,
   AC_SCREEN_DISPLAY_ON,
@@ -31,6 +34,9 @@ import {
   AC_SWING_VERTICAL_ON,
   AC_TEMPERATURE_AMBIENT,
   AC_TEMPERATURE_TARGET,
+  AUX_ECOMODE,
+  AUX_ECOMODE_OFF,
+  AUX_ECOMODE_ON,
   AuxAcModeValue,
   AuxFanSpeed,
   AuxProducts,
@@ -61,6 +67,15 @@ const FAN_SPEED_LEVELS: Array<{ aux: AuxFanSpeed; percent: number }> = [
   { aux: AuxFanSpeed.MEDIUM, percent: 60 },
   { aux: AuxFanSpeed.HIGH, percent: 80 },
   { aux: AuxFanSpeed.TURBO, percent: 100 },
+];
+
+const FAN_PRESET_DEFINITIONS: Array<{ speed: AuxFanSpeed; contextId: string; label: string }> = [
+  { speed: AuxFanSpeed.MUTE, contextId: 'fan-mute', label: 'Fan Mute' },
+  { speed: AuxFanSpeed.LOW, contextId: 'fan-low', label: 'Fan Low' },
+  { speed: AuxFanSpeed.MEDIUM, contextId: 'fan-mid', label: 'Fan Mid' },
+  { speed: AuxFanSpeed.HIGH, contextId: 'fan-high', label: 'Fan High' },
+  { speed: AuxFanSpeed.TURBO, contextId: 'fan-turbo', label: 'Fan Turbo' },
+  { speed: AuxFanSpeed.AUTO, contextId: 'fan-auto', label: 'Fan Auto' },
 ];
 
 const roundToOneDecimal = (value: number): number => Math.round(value * 10) / 10;
@@ -116,6 +131,18 @@ const FEATURE_SWITCH_CONFIG: Record<FeatureSwitchKey, FeatureSwitchDefinition> =
     onPayload: AC_HEALTH_ON,
     offPayload: AC_HEALTH_OFF,
   },
+  eco: {
+    displayName: 'Eco Mode',
+    param: AUX_ECOMODE,
+    onPayload: AUX_ECOMODE_ON,
+    offPayload: AUX_ECOMODE_OFF,
+  },
+  sleep: {
+    displayName: 'Sleep Mode',
+    param: AC_SLEEP,
+    onPayload: AC_SLEEP_ON,
+    offPayload: AC_SLEEP_OFF,
+  },
 };
 
 export class AuxCloudPlatformAccessory {
@@ -125,7 +152,7 @@ export class AuxCloudPlatformAccessory {
 
   private readonly temperatureStep: number;
 
-  private readonly fanControlMode: 'slider' | 'disabled';
+  private readonly fanControlMode: 'slider' | 'preset' | 'disabled';
 
   private readonly swingControlEnabled: boolean;
 
@@ -134,6 +161,10 @@ export class AuxCloudPlatformAccessory {
   private readonly featureSwitchServices = new Map<FeatureSwitchKey, Service>();
 
   private readonly boundFeatureSwitchHandlers = new Set<FeatureSwitchKey>();
+
+  private readonly fanPresetServices = new Map<AuxFanSpeed, Service>();
+
+  private readonly boundFanPresetHandlers = new Set<AuxFanSpeed>();
 
   private device?: AuxDevice;
 
@@ -288,9 +319,18 @@ export class AuxCloudPlatformAccessory {
       characteristic.onSet(this.handleRotationSpeedSet.bind(this))
         .onGet(this.handleRotationSpeedGet.bind(this));
       this.fanHandlersConfigured = true;
-    } else if (rotation) {
-      this.service.removeCharacteristic(rotation);
+      this.removeFanPresetServices();
+    } else {
+      if (rotation) {
+        this.service.removeCharacteristic(rotation);
+      }
       this.fanHandlersConfigured = false;
+
+      if (this.platform.fanControlMode === 'preset' && this.supportsFanSpeed) {
+        this.configureFanPresetSwitches();
+      } else {
+        this.removeFanPresetServices();
+      }
     }
   }
 
@@ -342,6 +382,49 @@ export class AuxCloudPlatformAccessory {
         this.boundFeatureSwitchHandlers.delete(feature);
       }
     });
+  }
+
+  private configureFanPresetSwitches(): void {
+    if (!this.device) {
+      return;
+    }
+
+    for (const definition of FAN_PRESET_DEFINITIONS) {
+      const existing = this.fanPresetServices.get(definition.speed)
+        ?? this.accessory.getServiceById(this.platform.Service.Switch, definition.contextId);
+
+      if (!existing) {
+        const service = this.accessory.addService(this.platform.Service.Switch, definition.label, definition.contextId);
+        this.bindFanPresetHandler(service, definition.speed);
+        this.fanPresetServices.set(definition.speed, service);
+      } else {
+        existing.updateCharacteristic(this.platform.Characteristic.Name, definition.label);
+        this.fanPresetServices.set(definition.speed, existing);
+        if (!this.boundFanPresetHandlers.has(definition.speed)) {
+          this.bindFanPresetHandler(existing, definition.speed);
+        }
+      }
+    }
+
+    this.updateFanPresetStates();
+  }
+
+  private bindFanPresetHandler(service: Service, speed: AuxFanSpeed): void {
+    service.getCharacteristic(this.platform.Characteristic.On)
+      .onSet(async (value) => {
+        const enabled = Boolean(value);
+        await this.handleFanPresetSet(speed, enabled);
+      })
+      .onGet(() => this.handleFanPresetGet(speed));
+    this.boundFanPresetHandlers.add(speed);
+  }
+
+  private removeFanPresetServices(): void {
+    for (const service of this.fanPresetServices.values()) {
+      this.accessory.removeService(service);
+    }
+    this.fanPresetServices.clear();
+    this.boundFanPresetHandlers.clear();
   }
 
   private async handleActiveSet(value: CharacteristicValue): Promise<void> {
@@ -458,6 +541,7 @@ export class AuxCloudPlatformAccessory {
     this.device.params[AC_FAN_SPEED] = auxSpeed;
     this.platform.updateCachedDevice(this.device);
     this.updateCharacteristicsFromDevice();
+    this.platform.requestRefresh(1_500);
   }
 
   private handleRotationSpeedGet(): CharacteristicValue {
@@ -490,6 +574,7 @@ export class AuxCloudPlatformAccessory {
     await this.platform.sendDeviceParams(this.device, payload);
     this.platform.updateCachedDevice(this.device);
     this.updateCharacteristicsFromDevice();
+    this.platform.requestRefresh(1_500);
   }
 
   private handleSwingModeGet(): CharacteristicValue {
@@ -519,6 +604,7 @@ export class AuxCloudPlatformAccessory {
     this.device.params[definition.param] = enabled ? 1 : 0;
     this.platform.updateCachedDevice(this.device);
     this.updateCharacteristicsFromDevice();
+    this.platform.requestRefresh(2_000);
   }
 
   private handleFeatureSwitchGet(feature: FeatureSwitchKey): CharacteristicValue {
@@ -562,6 +648,8 @@ export class AuxCloudPlatformAccessory {
         this.platform.Characteristic.RotationSpeed,
         this.handleRotationSpeedGet(),
       );
+    } else if (this.platform.fanControlMode === 'preset') {
+      this.updateFanPresetStates();
     }
 
     if (this.swingHandlersConfigured) {
@@ -622,6 +710,43 @@ export class AuxCloudPlatformAccessory {
     }
 
     return closest.aux;
+  }
+
+  private async handleFanPresetSet(speed: AuxFanSpeed, enabled: boolean): Promise<void> {
+    if (!this.device || !enabled) {
+      // If disabled toggle, immediately restore actual state to keep radio behaviour.
+      this.updateFanPresetStates();
+      return;
+    }
+
+    await this.platform.sendDeviceParams(this.device, { [AC_FAN_SPEED]: speed });
+
+    this.device.params = this.device.params ?? {};
+    this.device.params[AC_FAN_SPEED] = speed;
+    this.platform.updateCachedDevice(this.device);
+    this.updateFanPresetStates();
+    this.platform.requestRefresh(1_500);
+  }
+
+  private handleFanPresetGet(speed: AuxFanSpeed): CharacteristicValue {
+    if (!this.device) {
+      return false;
+    }
+    return this.device.params[AC_FAN_SPEED] === speed;
+  }
+
+  private updateFanPresetStates(): void {
+    if (!this.device) {
+      return;
+    }
+
+    const current = this.device.params[AC_FAN_SPEED];
+    for (const [speed, service] of this.fanPresetServices.entries()) {
+      service.updateCharacteristic(
+        this.platform.Characteristic.On,
+        current === speed,
+      );
+    }
   }
 
   private getDisplayMinTarget(): number {
