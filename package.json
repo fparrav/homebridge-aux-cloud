@@ -1,6 +1,6 @@
 {
   "name": "homebridge-aux-cloud",
-  "version": "0.0.2-beta.3",
+  "version": "0.0.2-beta.4",
   "description": "Homebridge plugin for AUX Cloud appliances (ported from maeek/ha-aux-cloud).",
   "license": "MIT",
   "keywords": [
