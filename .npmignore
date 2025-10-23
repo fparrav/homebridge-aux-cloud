@@ -1,0 +1,10 @@
+src/
+test/
+tests/
+.eslintrc.js
+.eslintignore
+tsconfig.json
+tsconfig.build.json
+config.schema.json
+/*.tgz
+/.github/

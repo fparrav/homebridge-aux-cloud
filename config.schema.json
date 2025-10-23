@@ -1,0 +1,61 @@
+{
+  "pluginAlias": "AuxCloudPlatform",
+  "pluginType": "platform",
+  "singular": true,
+  "schema": {
+    "title": "AUX Cloud Platform",
+    "type": "object",
+    "required": [
+      "name",
+      "username",
+      "password"
+    ],
+    "properties": {
+      "name": {
+        "title": "Name",
+        "type": "string",
+        "default": "Aux Cloud"
+      },
+      "username": {
+        "title": "AUX Cloud Username",
+        "type": "string",
+        "format": "email"
+      },
+      "password": {
+        "title": "AUX Cloud Password",
+        "type": "string"
+      },
+      "pollInterval": {
+        "title": "Polling Interval (seconds)",
+        "description": "How frequently the plugin should request updated state from AUX Cloud.",
+        "type": "integer",
+        "default": 60,
+        "minimum": 30,
+        "maximum": 600
+      },
+      "devices": {
+        "title": "Devices",
+        "type": "array",
+        "description": "Optional manual device mapping to override discovered names.",
+        "items": {
+          "title": "Device",
+          "type": "object",
+          "required": [
+            "id",
+            "name"
+          ],
+          "properties": {
+            "id": {
+              "title": "Device ID",
+              "type": "string"
+            },
+            "name": {
+              "title": "Display Name",
+              "type": "string"
+            }
+          }
+        }
+      }
+    }
+  }
+}
