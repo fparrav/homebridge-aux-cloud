@@ -1,19 +1,19 @@
 {
   "name": "homebridge-aux-cloud",
   "version": "0.0.2-beta.0",
-  "description": "Homebridge plugin scaffold for AUX Cloud appliances.",
+  "description": "Homebridge plugin for AUX Cloud appliances (ported from maeek/ha-aux-cloud).",
   "license": "MIT",
   "keywords": [
     "homebridge-plugin"
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/felipe/homebridge-aux-cloud.git"
+    "url": "https://github.com/fparrav/homebridge-aux-cloud.git"
   },
   "bugs": {
-    "url": "https://github.com/felipe/homebridge-aux-cloud/issues"
+    "url": "https://github.com/fparrav/homebridge-aux-cloud/issues"
   },
-  "homepage": "https://github.com/felipe/homebridge-aux-cloud#readme",
+  "homepage": "https://github.com/fparrav/homebridge-aux-cloud#readme",
   "engines": {
     "homebridge": ">=1.6.0",
     "node": ">=18.15.0"
@@ -33,6 +33,9 @@
     "prepublishOnly": "npm run lint && npm run build",
     "test": "echo \"No automated tests yet\""
   },
+  "dependencies": {
+    "axios": "^1.7.7"
+  },
   "devDependencies": {
     "@types/node": "^20.14.2",
     "@typescript-eslint/eslint-plugin": "^6.21.0",
@@ -40,6 +43,6 @@
     "eslint": "^8.57.0",
     "homebridge": "^1.7.0",
     "rimraf": "^5.0.5",
-    "typescript": "^5.4.5"
+    "typescript": "~5.3.3"
   }
 }

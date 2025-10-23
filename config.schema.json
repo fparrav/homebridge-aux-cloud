@@ -19,11 +19,22 @@
       "username": {
         "title": "AUX Cloud Username",
         "type": "string",
-        "format": "email"
+        "description": "Email address or phone number registered with AUX Cloud."
       },
       "password": {
         "title": "AUX Cloud Password",
         "type": "string"
+      },
+      "region": {
+        "title": "Region",
+        "type": "string",
+        "default": "eu",
+        "enum": [
+          "eu",
+          "usa",
+          "cn"
+        ],
+        "description": "Select the AUX Cloud region that matches your account."
       },
       "pollInterval": {
         "title": "Polling Interval (seconds)",
@@ -33,27 +44,22 @@
         "minimum": 30,
         "maximum": 600
       },
-      "devices": {
-        "title": "Devices",
+      "includeDeviceIds": {
+        "title": "Included Device IDs",
         "type": "array",
-        "description": "Optional manual device mapping to override discovered names.",
+        "description": "Optional list of AUX endpoint IDs to expose. Leave empty to include every discovered device.",
         "items": {
-          "title": "Device",
-          "type": "object",
-          "required": [
-            "id",
-            "name"
-          ],
-          "properties": {
-            "id": {
-              "title": "Device ID",
-              "type": "string"
-            },
-            "name": {
-              "title": "Display Name",
-              "type": "string"
-            }
-          }
+          "title": "Endpoint ID",
+          "type": "string"
+        }
+      },
+      "excludeDeviceIds": {
+        "title": "Excluded Device IDs",
+        "type": "array",
+        "description": "Optional list of AUX endpoint IDs to skip after discovery.",
+        "items": {
+          "title": "Endpoint ID",
+          "type": "string"
         }
       }
     }

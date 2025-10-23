@@ -1,26 +1,24 @@
 import type {
   API,
+  Characteristic,
   DynamicPlatformPlugin,
   Logger,
   PlatformAccessory,
   PlatformConfig,
   Service,
-  Characteristic,
 } from 'homebridge';
 
+import { AuxCloudClient, type AuxDevice } from './api/AuxCloudClient';
 import { AuxCloudPlatformAccessory } from './platformAccessory';
 import { PLATFORM_NAME, PLUGIN_NAME } from './settings';
-
-interface AuxCloudDevice {
-  id: string;
-  name: string;
-}
 
 export interface AuxCloudPlatformConfig extends PlatformConfig {
   username?: string;
   password?: string;
+  region?: 'eu' | 'usa' | 'cn';
   pollInterval?: number;
-  devices?: AuxCloudDevice[];
+  includeDeviceIds?: string[];
+  excludeDeviceIds?: string[];
 }
 
 export class AuxCloudPlatform implements DynamicPlatformPlugin {
@@ -28,7 +26,24 @@ export class AuxCloudPlatform implements DynamicPlatformPlugin {
   public readonly Characteristic: typeof Characteristic = this.api.hap.Characteristic;
 
   public readonly accessories: PlatformAccessory[] = [];
+
   private readonly config: AuxCloudPlatformConfig;
+
+  private readonly client: AuxCloudClient;
+
+  private readonly includeIds: Set<string>;
+
+  private readonly excludeIds: Set<string>;
+
+  private readonly handlers = new Map<string, AuxCloudPlatformAccessory>();
+
+  private readonly devicesById = new Map<string, AuxDevice>();
+
+  private refreshTimer?: NodeJS.Timeout;
+
+  private isSyncing = false;
+
+  private refreshDebounce?: NodeJS.Timeout;
 
   constructor(
     public readonly log: Logger,
@@ -36,48 +51,152 @@ export class AuxCloudPlatform implements DynamicPlatformPlugin {
     public readonly api: API,
   ) {
     this.config = config as AuxCloudPlatformConfig;
-    this.log.debug('Finished initializing platform:', this.config.name);
+    this.includeIds = new Set(this.config.includeDeviceIds ?? []);
+    this.excludeIds = new Set(this.config.excludeDeviceIds ?? []);
+
+    this.client = new AuxCloudClient({
+      region: this.config.region ?? 'eu',
+      logger: this.log,
+    });
+
+    this.log.debug('Finished initializing platform: %s', this.config.name);
 
     this.api.on('didFinishLaunching', () => {
-      this.log.debug('Executed didFinishLaunching callback');
-      this.discoverDevices();
+      void this.initialize();
     });
   }
 
   configureAccessory(accessory: PlatformAccessory): void {
-    this.log.info('Loading accessory from cache:', accessory.displayName);
+    this.log.info('Loading accessory from cache: %s', accessory.displayName);
     this.accessories.push(accessory);
+
+    if (!this.handlers.has(accessory.UUID)) {
+      const handler = new AuxCloudPlatformAccessory(this, accessory);
+      this.handlers.set(accessory.UUID, handler);
+    }
   }
 
-  private discoverDevices(): void {
-    const configuredDevices = this.config.devices ?? [];
-    const fallbackDevices: AuxCloudDevice[] = configuredDevices.length > 0 ? [] : [{
-      id: 'aux-device-001',
-      name: 'Sample AUX Device',
-    }];
+  public getDevice(endpointId: string): AuxDevice | undefined {
+    return this.devicesById.get(endpointId);
+  }
 
-    const devices: AuxCloudDevice[] = configuredDevices.length > 0 ? configuredDevices : fallbackDevices;
+  public updateCachedDevice(device: AuxDevice): void {
+    this.devicesById.set(device.endpointId, device);
+  }
 
-    if (!devices.length) {
-      this.log.warn('No devices configured or discovered. Add credentials to enable discovery.');
+  public async sendDeviceParams(device: AuxDevice, params: Record<string, number>): Promise<void> {
+    await this.client.setDeviceParams(device, params);
+    this.requestRefresh(2_000);
+  }
+
+  public requestRefresh(delayMs = 1_500): void {
+    if (this.refreshDebounce) {
+      clearTimeout(this.refreshDebounce);
+    }
+
+    this.refreshDebounce = setTimeout(() => {
+      void this.refreshDevices();
+    }, delayMs);
+  }
+
+  private async initialize(): Promise<void> {
+    if (!this.config.username || !this.config.password) {
+      this.log.error('AUX Cloud credentials are not configured. Please update the plugin settings.');
       return;
     }
 
+    await this.refreshDevices();
+
+    const intervalSeconds = this.validatePollInterval(this.config.pollInterval);
+    this.refreshTimer = setInterval(() => {
+      void this.refreshDevices();
+    }, intervalSeconds * 1000);
+  }
+
+  private validatePollInterval(interval?: number): number {
+    if (!interval || Number.isNaN(interval) || interval < 30) {
+      return 60;
+    }
+    if (interval > 600) {
+      return 600;
+    }
+    return interval;
+  }
+
+  private async refreshDevices(): Promise<void> {
+    if (this.isSyncing) {
+      return;
+    }
+    this.isSyncing = true;
+
+    try {
+      await this.client.ensureLoggedIn(this.config.username!, this.config.password!);
+
+      const devices = await this.client.listDevices({
+        includeIds: this.includeIds,
+        excludeIds: this.excludeIds,
+      });
+
+      this.log.debug('Fetched %d AUX Cloud devices', devices.length);
+      this.reconcileAccessories(devices);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.log.error('Failed to refresh AUX Cloud devices: %s', message);
+      this.client.invalidateSession();
+    } finally {
+      this.isSyncing = false;
+    }
+  }
+
+  private reconcileAccessories(devices: AuxDevice[]): void {
+    const seen = new Set<string>();
+
     for (const device of devices) {
-      const uuid = this.api.hap.uuid.generate(device.id);
-      const existingAccessory = this.accessories.find(accessory => accessory.UUID === uuid);
+      this.devicesById.set(device.endpointId, device);
+      const uuid = this.api.hap.uuid.generate(device.endpointId);
+      seen.add(uuid);
+
+      const existingAccessory = this.accessories.find((accessory) => accessory.UUID === uuid);
 
       if (existingAccessory) {
-        this.log.info('Restoring existing accessory from cache:', existingAccessory.displayName);
-        existingAccessory.context.device = device;
-        new AuxCloudPlatformAccessory(this, existingAccessory);
-      } else {
-        this.log.info('Adding new accessory:', device.name);
-        const accessory = new this.api.platformAccessory(device.name, uuid);
-        accessory.context.device = device;
+        existingAccessory.context.device = {
+          endpointId: device.endpointId,
+          productId: device.productId,
+          friendlyName: device.friendlyName,
+        };
 
-        new AuxCloudPlatformAccessory(this, accessory);
+        const handler = this.handlers.get(existingAccessory.UUID) ?? new AuxCloudPlatformAccessory(this, existingAccessory);
+        handler.updateAccessory(device);
+        this.handlers.set(existingAccessory.UUID, handler);
+      } else {
+        this.log.info('Adding new accessory: %s', device.friendlyName);
+        const accessory = new this.api.platformAccessory(device.friendlyName, uuid);
+        accessory.context.device = {
+          endpointId: device.endpointId,
+          productId: device.productId,
+          friendlyName: device.friendlyName,
+        };
+
+        const handler = new AuxCloudPlatformAccessory(this, accessory);
+        handler.updateAccessory(device);
+
+        this.accessories.push(accessory);
+        this.handlers.set(accessory.UUID, handler);
         this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
+      }
+    }
+
+    const staleAccessories = this.accessories.filter((accessory) => !seen.has(accessory.UUID));
+    if (staleAccessories.length > 0) {
+      this.log.info('Removing %d stale AUX Cloud accessories', staleAccessories.length);
+      this.api.unregisterPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, staleAccessories);
+
+      for (const accessory of staleAccessories) {
+        this.handlers.delete(accessory.UUID);
+        const index = this.accessories.indexOf(accessory);
+        if (index >= 0) {
+          this.accessories.splice(index, 1);
+        }
       }
     }
   }
