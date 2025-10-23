@@ -151,6 +151,8 @@ export class AuxCloudPlatformAccessory {
 
   private supportsChildLock = false;
 
+  private hasFault = false;
+
   constructor(
     private readonly platform: AuxCloudPlatform,
     private readonly accessory: PlatformAccessory,
@@ -268,6 +270,11 @@ export class AuxCloudPlatformAccessory {
       })
       .onSet(this.handleTargetTemperatureSet.bind(this))
       .onGet(this.handleTargetTemperatureGet.bind(this));
+
+    this.service.updateCharacteristic(
+      this.platform.Characteristic.StatusFault,
+      this.platform.Characteristic.StatusFault.NO_FAULT,
+    );
   }
 
   private configureFanCharacteristic(): void {
@@ -347,14 +354,18 @@ export class AuxCloudPlatformAccessory {
     const isActive = Number(value) === this.platform.Characteristic.Active.ACTIVE;
     const payload = isActive ? AC_POWER_ON : AC_POWER_OFF;
 
-    await this.platform.sendDeviceParams(this.device, payload);
+    try {
+      await this.platform.sendDeviceParams(this.device, payload);
 
-    this.device.params = this.device.params ?? {};
-    this.device.state = isActive ? 1 : 0;
-    this.device.params[AC_POWER] = isActive ? 1 : 0;
-    this.platform.updateCachedDevice(this.device);
-    this.updateCharacteristicsFromDevice();
-    this.platform.requestRefresh(4000);
+      this.device.params = this.device.params ?? {};
+      this.device.state = isActive ? 1 : 0;
+      this.device.params[AC_POWER] = isActive ? 1 : 0;
+      this.platform.updateCachedDevice(this.device);
+      this.updateCharacteristicsFromDevice();
+      this.setFaulted(false);
+    } catch (error) {
+      this.handleCommandError('set power', error);
+    }
   }
 
   private handleActiveGet(): CharacteristicValue {
@@ -372,13 +383,17 @@ export class AuxCloudPlatformAccessory {
     }
 
     const auxMode = this.mapTargetStateToAuxMode(Number(value));
-    await this.platform.sendDeviceParams(this.device, { [AUX_MODE]: auxMode });
+    try {
+      await this.platform.sendDeviceParams(this.device, { [AUX_MODE]: auxMode });
 
-    this.device.params = this.device.params ?? {};
-    this.device.params[AUX_MODE] = auxMode;
-    this.platform.updateCachedDevice(this.device);
-    this.updateCharacteristicsFromDevice();
-    this.platform.requestRefresh(4000);
+      this.device.params = this.device.params ?? {};
+      this.device.params[AUX_MODE] = auxMode;
+      this.platform.updateCachedDevice(this.device);
+      this.updateCharacteristicsFromDevice();
+      this.setFaulted(false);
+    } catch (error) {
+      this.handleCommandError('set target mode', error);
+    }
   }
 
   private handleTargetStateGet(): CharacteristicValue {
@@ -432,13 +447,17 @@ export class AuxCloudPlatformAccessory {
     const celsius = displayToCelsius(clampedDisplay, this.temperatureUnit);
     const scaled = Math.round(celsius * 10);
 
-    await this.platform.sendDeviceParams(this.device, { [AC_TEMPERATURE_TARGET]: scaled });
+    try {
+      await this.platform.sendDeviceParams(this.device, { [AC_TEMPERATURE_TARGET]: scaled });
 
-    this.device.params = this.device.params ?? {};
-    this.device.params[AC_TEMPERATURE_TARGET] = scaled;
-    this.platform.updateCachedDevice(this.device);
-    this.updateCharacteristicsFromDevice();
-    this.platform.requestRefresh(4000);
+      this.device.params = this.device.params ?? {};
+      this.device.params[AC_TEMPERATURE_TARGET] = scaled;
+      this.platform.updateCachedDevice(this.device);
+      this.updateCharacteristicsFromDevice();
+      this.setFaulted(false);
+    } catch (error) {
+      this.handleCommandError('set target temperature', error);
+    }
   }
 
   private handleTargetTemperatureGet(): CharacteristicValue {
@@ -455,13 +474,17 @@ export class AuxCloudPlatformAccessory {
     const percent = clamp(Number(value), 0, 100);
     const auxSpeed = this.mapRotationToAuxFanSpeed(percent);
 
-    await this.platform.sendDeviceParams(this.device, { [AC_FAN_SPEED]: auxSpeed });
+    try {
+      await this.platform.sendDeviceParams(this.device, { [AC_FAN_SPEED]: auxSpeed });
 
-    this.device.params = this.device.params ?? {};
-    this.device.params[AC_FAN_SPEED] = auxSpeed;
-    this.platform.updateCachedDevice(this.device);
-    this.updateCharacteristicsFromDevice();
-    this.platform.requestRefresh(4000);
+      this.device.params = this.device.params ?? {};
+      this.device.params[AC_FAN_SPEED] = auxSpeed;
+      this.platform.updateCachedDevice(this.device);
+      this.updateCharacteristicsFromDevice();
+      this.setFaulted(false);
+    } catch (error) {
+      this.handleCommandError('set fan speed', error);
+    }
   }
 
   private handleRotationSpeedGet(): CharacteristicValue {
@@ -491,10 +514,14 @@ export class AuxCloudPlatformAccessory {
       this.device.params[AC_SWING_HORIZONTAL] = enabled ? 1 : 0;
     }
 
-    await this.platform.sendDeviceParams(this.device, payload);
-    this.platform.updateCachedDevice(this.device);
-    this.updateCharacteristicsFromDevice();
-    this.platform.requestRefresh(4000);
+    try {
+      await this.platform.sendDeviceParams(this.device, payload);
+      this.platform.updateCachedDevice(this.device);
+      this.updateCharacteristicsFromDevice();
+      this.setFaulted(false);
+    } catch (error) {
+      this.handleCommandError('set swing mode', error);
+    }
   }
 
   private handleSwingModeGet(): CharacteristicValue {
@@ -518,13 +545,17 @@ export class AuxCloudPlatformAccessory {
     const locked = Number(value) === this.platform.Characteristic.LockPhysicalControls.CONTROL_LOCK_ENABLED;
     const payload = locked ? AC_CHILD_LOCK_ON : AC_CHILD_LOCK_OFF;
 
-    await this.platform.sendDeviceParams(this.device, payload);
+    try {
+      await this.platform.sendDeviceParams(this.device, payload);
 
-    this.device.params = this.device.params ?? {};
-    this.device.params[AC_CHILD_LOCK] = locked ? 1 : 0;
-    this.platform.updateCachedDevice(this.device);
-    this.updateCharacteristicsFromDevice();
-    this.platform.requestRefresh(4000);
+      this.device.params = this.device.params ?? {};
+      this.device.params[AC_CHILD_LOCK] = locked ? 1 : 0;
+      this.platform.updateCachedDevice(this.device);
+      this.updateCharacteristicsFromDevice();
+      this.setFaulted(false);
+    } catch (error) {
+      this.handleCommandError('set child lock', error);
+    }
   }
 
   private handleLockPhysicalControlsGet(): CharacteristicValue {
@@ -546,13 +577,17 @@ export class AuxCloudPlatformAccessory {
     const definition = FEATURE_SWITCH_CONFIG[feature];
     const payload = enabled ? definition.onPayload : definition.offPayload;
 
-    await this.platform.sendDeviceParams(this.device, payload);
+    try {
+      await this.platform.sendDeviceParams(this.device, payload);
 
-    this.device.params = this.device.params ?? {};
-    this.device.params[definition.param] = enabled ? 1 : 0;
-    this.platform.updateCachedDevice(this.device);
-    this.updateCharacteristicsFromDevice();
-    this.platform.requestRefresh(4000);
+      this.device.params = this.device.params ?? {};
+      this.device.params[definition.param] = enabled ? 1 : 0;
+      this.platform.updateCachedDevice(this.device);
+      this.updateCharacteristicsFromDevice();
+      this.setFaulted(false);
+    } catch (error) {
+      this.handleCommandError(`toggle ${feature}`, error);
+    }
   }
 
   private handleFeatureSwitchGet(feature: FeatureSwitchKey): CharacteristicValue {
@@ -618,6 +653,8 @@ export class AuxCloudPlatformAccessory {
         this.handleFeatureSwitchGet(feature),
       );
     }
+
+    this.setFaulted(false);
   }
 
   private mapTargetStateToAuxMode(value: number): number {
@@ -702,5 +739,31 @@ export class AuxCloudPlatformAccessory {
 
   private getContext(): AuxCloudAccessoryContext {
     return this.accessory.context as AuxCloudAccessoryContext;
+  }
+
+  private setFaulted(faulted: boolean): void {
+    if (this.hasFault === faulted) {
+      return;
+    }
+
+    this.hasFault = faulted;
+    const value = faulted
+      ? this.platform.Characteristic.StatusFault.GENERAL_FAULT
+      : this.platform.Characteristic.StatusFault.NO_FAULT;
+    this.service.updateCharacteristic(this.platform.Characteristic.StatusFault, value);
+  }
+
+  private handleCommandError(context: string, error: unknown): never {
+    const message = error instanceof Error ? error.message : String(error);
+    this.platform.log.warn(
+      'Failed to %s for %s: %s',
+      context,
+      this.accessory.displayName,
+      message,
+    );
+    this.setFaulted(true);
+
+    const HapStatusError = this.platform.api.hap.HapStatusError;
+    throw new HapStatusError(this.platform.api.hap.HAPStatus.SERVICE_COMMUNICATION_FAILURE);
   }
 }

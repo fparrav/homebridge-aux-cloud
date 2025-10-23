@@ -8,7 +8,7 @@ import type {
   Service,
 } from 'homebridge';
 
-import { AuxCloudClient, type AuxDevice } from './api/AuxCloudClient';
+import { AuxCloudClient, AuxNetworkTimeoutError, type AuxDevice } from './api/AuxCloudClient';
 import { AuxCloudPlatformAccessory } from './platformAccessory';
 import { PLATFORM_NAME, PLUGIN_NAME } from './settings';
 
@@ -138,8 +138,20 @@ export class AuxCloudPlatform implements DynamicPlatformPlugin {
   }
 
   public async sendDeviceParams(device: AuxDevice, params: Record<string, number>): Promise<void> {
-    await this.client.setDeviceParams(device, params);
-    this.requestRefresh(2_000);
+    try {
+      await this.client.setDeviceParams(device, params);
+      this.requestRefresh(4_000);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (error instanceof AuxNetworkTimeoutError) {
+        this.log.warn('Timed out sending params to %s: %s', device.endpointId, message);
+      } else {
+        this.log.error('Failed to send params to %s: %s', device.endpointId, message);
+      }
+
+      this.requestRefresh(5_000);
+      throw error;
+    }
   }
 
   public requestRefresh(delayMs = 1_500): void {
