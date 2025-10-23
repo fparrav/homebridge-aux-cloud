@@ -413,8 +413,13 @@ export class AuxCloudPlatformAccessory {
 
   private handleCurrentTemperatureGet(): CharacteristicValue {
     const celsius = this.getCelsiusParam(AC_TEMPERATURE_AMBIENT);
-    const fallback = celsius ?? DEFAULT_TEMPERATURE_C;
-    return roundToOneDecimal(celsiusToDisplay(fallback, this.temperatureUnit));
+    const valueC = celsius ?? DEFAULT_TEMPERATURE_C;
+
+    if (this.temperatureUnit === 'F') {
+      return roundToOneDecimal(celsiusToDisplay(valueC, 'F'));
+    }
+
+    return Number((valueC).toFixed(1));
   }
 
   private async handleTargetTemperatureSet(value: CharacteristicValue): Promise<void> {
