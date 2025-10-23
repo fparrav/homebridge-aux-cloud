@@ -48,9 +48,5 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           YARN_NPM_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: |
-          if [ "${{ github.event.release.prerelease }}" = "true" ]; then
-            npx semantic-release
-          else
-            npx semantic-release
-          fi
+        run: npm_package_version=$(node -p "require('./package.json').version") && \
+          npx semantic-release --no-ci --branches "$([ "${{ github.event.release.prerelease }}" = "true" ] && echo 'beta' || echo 'main')" || true
