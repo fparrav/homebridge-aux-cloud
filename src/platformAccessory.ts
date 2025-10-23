@@ -354,7 +354,7 @@ export class AuxCloudPlatformAccessory {
     this.device.params[AC_POWER] = isActive ? 1 : 0;
     this.platform.updateCachedDevice(this.device);
     this.updateCharacteristicsFromDevice();
-    this.platform.requestRefresh(1500);
+    this.platform.requestRefresh(4000);
   }
 
   private handleActiveGet(): CharacteristicValue {
@@ -378,7 +378,7 @@ export class AuxCloudPlatformAccessory {
     this.device.params[AUX_MODE] = auxMode;
     this.platform.updateCachedDevice(this.device);
     this.updateCharacteristicsFromDevice();
-    this.platform.requestRefresh(1500);
+    this.platform.requestRefresh(4000);
   }
 
   private handleTargetStateGet(): CharacteristicValue {
@@ -438,7 +438,7 @@ export class AuxCloudPlatformAccessory {
     this.device.params[AC_TEMPERATURE_TARGET] = scaled;
     this.platform.updateCachedDevice(this.device);
     this.updateCharacteristicsFromDevice();
-    this.platform.requestRefresh(1500);
+    this.platform.requestRefresh(4000);
   }
 
   private handleTargetTemperatureGet(): CharacteristicValue {
@@ -461,7 +461,7 @@ export class AuxCloudPlatformAccessory {
     this.device.params[AC_FAN_SPEED] = auxSpeed;
     this.platform.updateCachedDevice(this.device);
     this.updateCharacteristicsFromDevice();
-    this.platform.requestRefresh(1500);
+    this.platform.requestRefresh(4000);
   }
 
   private handleRotationSpeedGet(): CharacteristicValue {
@@ -494,7 +494,7 @@ export class AuxCloudPlatformAccessory {
     await this.platform.sendDeviceParams(this.device, payload);
     this.platform.updateCachedDevice(this.device);
     this.updateCharacteristicsFromDevice();
-    this.platform.requestRefresh(1500);
+    this.platform.requestRefresh(4000);
   }
 
   private handleSwingModeGet(): CharacteristicValue {
@@ -524,7 +524,7 @@ export class AuxCloudPlatformAccessory {
     this.device.params[AC_CHILD_LOCK] = locked ? 1 : 0;
     this.platform.updateCachedDevice(this.device);
     this.updateCharacteristicsFromDevice();
-    this.platform.requestRefresh(1500);
+    this.platform.requestRefresh(4000);
   }
 
   private handleLockPhysicalControlsGet(): CharacteristicValue {
@@ -552,7 +552,7 @@ export class AuxCloudPlatformAccessory {
     this.device.params[definition.param] = enabled ? 1 : 0;
     this.platform.updateCachedDevice(this.device);
     this.updateCharacteristicsFromDevice();
-    this.platform.requestRefresh(2000);
+    this.platform.requestRefresh(4000);
   }
 
   private handleFeatureSwitchGet(feature: FeatureSwitchKey): CharacteristicValue {
