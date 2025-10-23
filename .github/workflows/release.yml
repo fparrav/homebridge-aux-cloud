@@ -16,7 +16,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          ref: ${{ github.event.release.target_commitish }}
+          ref: ${{ github.event.release.prerelease && 'beta' || 'main' }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -34,4 +34,5 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           YARN_NPM_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          GITHUB_REF: ${{ github.event.release.prerelease && 'refs/heads/beta' || 'refs/heads/main' }}
         run: npx semantic-release
