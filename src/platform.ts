@@ -16,6 +16,7 @@ export interface AuxCloudPlatformConfig extends PlatformConfig {
   username?: string;
   password?: string;
   region?: 'eu' | 'usa' | 'cn';
+  baseUrl?: string;
   pollInterval?: number;
   includeDeviceIds?: string[];
   excludeDeviceIds?: string[];
@@ -26,6 +27,11 @@ export class AuxCloudPlatform implements DynamicPlatformPlugin {
   public readonly Characteristic: typeof Characteristic = this.api.hap.Characteristic;
 
   public readonly accessories: PlatformAccessory[] = [];
+
+  private static hasValidContext(accessory: PlatformAccessory): boolean {
+    const context = accessory.context as { device?: { endpointId?: string } };
+    return Boolean(context.device?.endpointId);
+  }
 
   private readonly config: AuxCloudPlatformConfig;
 
@@ -56,6 +62,7 @@ export class AuxCloudPlatform implements DynamicPlatformPlugin {
 
     this.client = new AuxCloudClient({
       region: this.config.region ?? 'eu',
+      baseUrl: this.config.baseUrl,
       logger: this.log,
     });
 
@@ -67,6 +74,12 @@ export class AuxCloudPlatform implements DynamicPlatformPlugin {
   }
 
   configureAccessory(accessory: PlatformAccessory): void {
+    if (!AuxCloudPlatform.hasValidContext(accessory)) {
+      this.log.warn('Removing legacy AUX accessory without endpoint id: %s', accessory.displayName);
+      this.api.unregisterPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
+      return;
+    }
+
     this.log.info('Loading accessory from cache: %s', accessory.displayName);
     this.accessories.push(accessory);
 

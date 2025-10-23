@@ -57,6 +57,7 @@ export interface AuxDevice extends AuxDeviceSummary {
 
 interface AuxCloudClientOptions {
   region?: string;
+  baseUrl?: string;
   logger?: Logger;
   requestTimeoutMs?: number;
 }
@@ -92,6 +93,8 @@ export class AuxCloudClient {
 
   private readonly region: string;
 
+  private readonly baseUrl: string;
+
   private identifier?: string;
 
   private password?: string;
@@ -104,14 +107,20 @@ export class AuxCloudClient {
 
   constructor(options: AuxCloudClientOptions = {}) {
     this.region = options.region && REGION_URLS[options.region] ? options.region : 'eu';
+    const regionBaseUrl = REGION_URLS[this.region] ?? REGION_URLS.eu;
+    this.baseUrl = options.baseUrl ?? regionBaseUrl;
     this.log = options.logger;
 
     this.http = axios.create({
-      baseURL: REGION_URLS[this.region],
+      baseURL: this.baseUrl,
       timeout: options.requestTimeoutMs ?? 15000,
       responseType: 'text',
       transformResponse: [(data) => data],
     });
+
+    if (options.baseUrl) {
+      this.log?.info('Using custom AUX Cloud API base URL: %s', this.baseUrl);
+    }
   }
 
   public isLoggedIn(): boolean {

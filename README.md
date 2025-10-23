@@ -26,6 +26,7 @@ After installing, open Homebridge Config UI X → Plugins → `AuxCloudPlatform`
   "username": "+34111222333",
   "password": "super-secret-password",
   "region": "eu",
+  "baseUrl": "",
   "pollInterval": 60,
   "includeDeviceIds": [],
   "excludeDeviceIds": []
@@ -33,6 +34,7 @@ After installing, open Homebridge Config UI X → Plugins → `AuxCloudPlatform`
 ```
 
 - `region` – one of `eu`, `usa`, or `cn`. Defaults to `eu`.
+- `baseUrl` – optional override of the AUX Cloud API host. Use this if the AC Freedom app reports “Other Areas” and provides a different server URL.
 - `pollInterval` – refresh cadence in seconds (30 – 600, default 60). The plugin also cheerfully refreshes right after issuing commands.
 - `includeDeviceIds` – optional list of AUX endpoint IDs to expose. Leave empty to include everything.
 - `excludeDeviceIds` – optional list to hide specific devices (handy if you only want HVAC and not the accompanying water heater, for example).

@@ -36,6 +36,12 @@
         ],
         "description": "Select the AUX Cloud region that matches your account."
       },
+      "baseUrl": {
+        "title": "Custom API Base URL",
+        "type": "string",
+        "placeholder": "https://app-service-xxx.smarthomecs.com",
+        "description": "Optional override for AUX Cloud API host. Provide this if your AC Freedom app reports \"Other Areas\" or a custom server."
+      },
       "pollInterval": {
         "title": "Polling Interval (seconds)",
         "description": "How frequently the plugin should request updated state from AUX Cloud.",
