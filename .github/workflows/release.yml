@@ -35,4 +35,6 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           YARN_NPM_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           GITHUB_REF: ${{ github.event.release.prerelease && 'refs/heads/beta' || 'refs/heads/main' }}
+          GITHUB_REF_NAME: ${{ github.event.release.prerelease && 'beta' || 'main' }}
+          GITHUB_REF_TYPE: branch
         run: npx semantic-release
