@@ -22,6 +22,8 @@ interface AuxCloudAccessoryContext {
 }
 
 const DEFAULT_TEMPERATURE = 24;
+const MIN_TARGET_TEMPERATURE = 16;
+const MAX_TARGET_TEMPERATURE = 30;
 
 export class AuxCloudPlatformAccessory {
   private readonly service: Service;
@@ -86,7 +88,6 @@ export class AuxCloudPlatformAccessory {
       HeatingThresholdTemperature,
       CoolingThresholdTemperature,
       TemperatureDisplayUnits,
-      StatusActive,
     } = this.platform.Characteristic;
 
     this.service.getCharacteristic(Active)
@@ -116,17 +117,16 @@ export class AuxCloudPlatformAccessory {
       .onGet(this.handleCurrentTemperatureGet.bind(this));
 
     this.service.getCharacteristic(HeatingThresholdTemperature)
-      .setProps({ minValue: 16, maxValue: 30, minStep: 0.5 })
+      .setProps({ minValue: MIN_TARGET_TEMPERATURE, maxValue: MAX_TARGET_TEMPERATURE, minStep: 0.5 })
       .onSet(this.handleTargetTemperatureSet.bind(this))
       .onGet(this.handleTargetTemperatureGet.bind(this));
 
     this.service.getCharacteristic(CoolingThresholdTemperature)
-      .setProps({ minValue: 16, maxValue: 30, minStep: 0.5 })
+      .setProps({ minValue: MIN_TARGET_TEMPERATURE, maxValue: MAX_TARGET_TEMPERATURE, minStep: 0.5 })
       .onSet(this.handleTargetTemperatureSet.bind(this))
       .onGet(this.handleTargetTemperatureGet.bind(this));
 
     this.service.updateCharacteristic(TemperatureDisplayUnits, TemperatureDisplayUnits.CELSIUS);
-    this.service.updateCharacteristic(StatusActive, true);
   }
 
   private async handleActiveSet(value: CharacteristicValue): Promise<void> {
@@ -210,7 +210,8 @@ export class AuxCloudPlatformAccessory {
     }
 
     const temperature = Number(value);
-    const scaled = Math.round(temperature * 10);
+    const clamped = Math.min(MAX_TARGET_TEMPERATURE, Math.max(MIN_TARGET_TEMPERATURE, temperature));
+    const scaled = Math.round(clamped * 10);
 
     await this.platform.sendDeviceParams(this.device, { [AC_TEMPERATURE_TARGET]: scaled });
 
@@ -222,7 +223,8 @@ export class AuxCloudPlatformAccessory {
 
   private handleTargetTemperatureGet(): CharacteristicValue {
     const target = this.getParamValue(AC_TEMPERATURE_TARGET);
-    return target ?? DEFAULT_TEMPERATURE;
+    const value = target ?? DEFAULT_TEMPERATURE;
+    return Math.min(MAX_TARGET_TEMPERATURE, Math.max(MIN_TARGET_TEMPERATURE, value));
   }
 
   private updateCharacteristicsFromDevice(): void {
@@ -251,8 +253,6 @@ export class AuxCloudPlatformAccessory {
       this.platform.Characteristic.CoolingThresholdTemperature,
       this.handleTargetTemperatureGet(),
     );
-    const statusActive = this.handleActiveGet() === this.platform.Characteristic.Active.ACTIVE;
-    this.service.updateCharacteristic(this.platform.Characteristic.StatusActive, statusActive);
   }
 
   private mapTargetStateToAuxMode(value: number): number {

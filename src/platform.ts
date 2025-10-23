@@ -165,9 +165,23 @@ export class AuxCloudPlatform implements DynamicPlatformPlugin {
     const seen = new Set<string>();
 
     for (const device of devices) {
+      const isKnownDevice = this.devicesById.has(device.endpointId);
       this.devicesById.set(device.endpointId, device);
       const uuid = this.api.hap.uuid.generate(device.endpointId);
       seen.add(uuid);
+
+      if (!isKnownDevice) {
+        this.log.info(
+          'Discovered AUX device "%s" (endpointId: %s, productId: %s)',
+          device.friendlyName,
+          device.endpointId,
+          device.productId,
+        );
+        this.log.debug(
+          'Use includeDeviceIds/excludeDeviceIds in the plugin configuration to control exposure (%s)',
+          device.endpointId,
+        );
+      }
 
       const existingAccessory = this.accessories.find((accessory) => accessory.UUID === uuid);
 
