@@ -57,7 +57,6 @@ export interface AuxDevice extends AuxDeviceSummary {
 
 interface AuxCloudClientOptions {
   region?: string;
-  baseUrl?: string;
   logger?: Logger;
   requestTimeoutMs?: number;
 }
@@ -93,8 +92,6 @@ export class AuxCloudClient {
 
   private readonly region: string;
 
-  private readonly baseUrl: string;
-
   private identifier?: string;
 
   private password?: string;
@@ -107,20 +104,14 @@ export class AuxCloudClient {
 
   constructor(options: AuxCloudClientOptions = {}) {
     this.region = options.region && REGION_URLS[options.region] ? options.region : 'eu';
-    const regionBaseUrl = REGION_URLS[this.region] ?? REGION_URLS.eu;
-    this.baseUrl = options.baseUrl ?? regionBaseUrl;
     this.log = options.logger;
 
     this.http = axios.create({
-      baseURL: this.baseUrl,
+      baseURL: REGION_URLS[this.region] ?? REGION_URLS.eu,
       timeout: options.requestTimeoutMs ?? 15000,
       responseType: 'text',
       transformResponse: [(data) => data],
     });
-
-    if (options.baseUrl) {
-      this.log?.info('Using custom AUX Cloud API base URL: %s', this.baseUrl);
-    }
   }
 
   public isLoggedIn(): boolean {
@@ -506,25 +497,38 @@ export class AuxCloudClient {
     };
   }
 
-  private async request<T>(options: RequestOptions): Promise<T> {
+  private async request<T>(options: RequestOptions, attempt = 1): Promise<T> {
     const { method, endpoint, headers, data, dataRaw, params } = options;
 
-    const response = await this.http.request({
-      method,
-      url: `/${endpoint.replace(/^\//, '')}`,
-      headers,
-      params,
-      data: dataRaw ?? data,
-    });
-
-    if (typeof response.data !== 'string') {
-      return response.data as T;
-    }
-
     try {
-      return JSON.parse(response.data) as T;
+      const response = await this.http.request({
+        method,
+        url: `/${endpoint.replace(/^\//, '')}`,
+        headers,
+        params,
+        data: dataRaw ?? data,
+      });
+
+      const payload = response.data;
+
+      if (typeof payload !== 'string') {
+        return payload as T;
+      }
+
+      try {
+        return JSON.parse(payload) as T;
+      } catch (error) {
+        throw new Error(`Failed to parse AUX Cloud response: ${payload}`);
+      }
     } catch (error) {
-      throw new Error(`Failed to parse AUX Cloud response: ${response.data}`);
+      if (attempt >= 3) {
+        throw error instanceof Error ? error : new Error(String(error));
+      }
+
+      const waitMs = Math.min(2000 * attempt, 5000);
+      this.log?.warn('Retrying AUX request %s (attempt %d)', endpoint, attempt + 1);
+      await new Promise((resolve) => setTimeout(resolve, waitMs));
+      return this.request(options, attempt + 1);
     }
   }
 }

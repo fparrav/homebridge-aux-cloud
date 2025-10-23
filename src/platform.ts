@@ -13,7 +13,6 @@ import { AuxCloudPlatformAccessory } from './platformAccessory';
 import { PLATFORM_NAME, PLUGIN_NAME } from './settings';
 
 export type FeatureSwitchKey =
-  | 'childLock'
   | 'screenDisplay'
   | 'comfortableWind'
   | 'mildewProof'
@@ -23,7 +22,6 @@ export type FeatureSwitchKey =
   | 'sleep';
 
 const ALLOWED_FEATURE_SWITCHES: FeatureSwitchKey[] = [
-  'childLock',
   'screenDisplay',
   'comfortableWind',
   'mildewProof',
@@ -37,9 +35,6 @@ export interface AuxCloudPlatformConfig extends PlatformConfig {
   username?: string;
   password?: string;
   region?: 'eu' | 'usa' | 'cn';
-  baseUrl?: string;
-  fanControlMode?: 'slider' | 'preset' | 'disabled';
-  enableSwingControl?: boolean;
   temperatureUnit?: 'C' | 'F';
   temperatureStep?: number;
   featureSwitches?: string[];
@@ -71,10 +66,6 @@ export class AuxCloudPlatform implements DynamicPlatformPlugin {
 
   public readonly temperatureStep: number;
 
-  public readonly fanControlMode: 'slider' | 'preset' | 'disabled';
-
-  public readonly swingControlEnabled: boolean;
-
   public readonly featureSwitches: Set<FeatureSwitchKey>;
 
   private readonly handlers = new Map<string, AuxCloudPlatformAccessory>();
@@ -94,7 +85,7 @@ export class AuxCloudPlatform implements DynamicPlatformPlugin {
   ) {
     this.config = config as AuxCloudPlatformConfig;
     this.includeIds = new Set(this.config.includeDeviceIds ?? []);
-   this.excludeIds = new Set(this.config.excludeDeviceIds ?? []);
+    this.excludeIds = new Set(this.config.excludeDeviceIds ?? []);
 
     this.temperatureUnit = this.config.temperatureUnit === 'F' ? 'F' : 'C';
     const configuredStep = this.config.temperatureStep === 1 ? 1 : 0.5;
@@ -103,12 +94,6 @@ export class AuxCloudPlatform implements DynamicPlatformPlugin {
       this.log.debug('Using 1°F increments when displaying temperatures.');
     }
 
-    this.fanControlMode = this.config.fanControlMode === 'preset'
-      ? 'preset'
-      : this.config.fanControlMode === 'disabled'
-        ? 'disabled'
-        : 'slider';
-    this.swingControlEnabled = this.config.enableSwingControl ?? true;
     const configuredFeatureSwitches = new Set(
       (this.config.featureSwitches ?? []).filter((value): value is FeatureSwitchKey =>
         ALLOWED_FEATURE_SWITCHES.includes(value as FeatureSwitchKey),
@@ -118,7 +103,6 @@ export class AuxCloudPlatform implements DynamicPlatformPlugin {
 
     this.client = new AuxCloudClient({
       region: this.config.region ?? 'eu',
-      baseUrl: this.config.baseUrl,
       logger: this.log,
     });
 

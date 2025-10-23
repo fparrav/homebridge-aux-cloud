@@ -36,29 +36,6 @@
         ],
         "description": "Select the AUX Cloud region that matches your account."
       },
-      "baseUrl": {
-        "title": "Custom API Base URL",
-        "type": "string",
-        "placeholder": "https://app-service-xxx.smarthomecs.com",
-        "description": "Optional override for AUX Cloud API host. Provide this if your AC Freedom app reports \"Other Areas\" or a custom server."
-      },
-      "fanControlMode": {
-        "title": "Fan Control Mode",
-        "type": "string",
-        "default": "slider",
-        "enum": [
-          "slider",
-          "preset",
-          "disabled"
-        ],
-        "description": "Choose how the fan speed is exposed. \"slider\" uses a RotationSpeed slider, \"preset\" creates dedicated switches per fan speed, \"disabled\" hides fan controls."
-      },
-      "enableSwingControl": {
-        "title": "Expose Swing Control",
-        "type": "boolean",
-        "default": true,
-        "description": "Disable if you do not want the oscillation toggle exposed in HomeKit."
-      },
       "temperatureUnit": {
         "title": "Temperature Unit",
         "type": "string",
@@ -85,17 +62,16 @@
         "items": {
           "type": "string",
           "enum": [
-            "childLock",
             "screenDisplay",
-          "comfortableWind",
-          "mildewProof",
-          "clean",
-          "health",
-          "eco",
-          "sleep"
-        ]
-      },
-        "description": "Expose optional HomeKit switches for AUX features like screen display, comfortable wind, mildew prevention, self-clean, health mode, and child lock."
+            "comfortableWind",
+            "mildewProof",
+            "clean",
+            "health",
+            "eco",
+            "sleep"
+          ]
+        },
+        "description": "Expose optional HomeKit switches for AUX features like screen display, comfortable wind, mildew prevention, self-clean, health, eco, and sleep modes."
       },
       "pollInterval": {
         "title": "Polling Interval (seconds)",
