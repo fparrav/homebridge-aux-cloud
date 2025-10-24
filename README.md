@@ -30,7 +30,6 @@ After installing, open Homebridge Config UI X → Plugins → `AuxCloudPlatform`
   "temperatureStep": 0.5,
   "featureSwitches": [
     "screenDisplay",
-    "comfortableWind",
     "mildewProof"
   ],
   "pollInterval": 60,
@@ -42,7 +41,7 @@ After installing, open Homebridge Config UI X → Plugins → `AuxCloudPlatform`
 - `region` – one of `eu`, `usa`, or `cn`. Defaults to `eu`.
 - `temperatureUnit` – display setpoints and ambient temperature in `C` (default) or `F`. Values are converted before hitting AUX Cloud.
 - `temperatureStep` – choose `0.5` for the classic AC Freedom 0.5 °C increments or `1` for whole degrees. In Fahrenheit mode the plugin enforces 1 °F steps.
-- `featureSwitches` – optional array of AUX features to expose as HomeKit switches. Supported values: `screenDisplay`, `comfortableWind`, `mildewProof`, `clean`, `health`, `eco`, `sleep`.
+- `featureSwitches` – optional array of AUX features to expose as HomeKit switches. Supported values: `screenDisplay`, `mildewProof`, `clean`, `health`, `eco`, `sleep`.
 - `pollInterval` – refresh cadence in seconds (30 – 600, default 60). The plugin also cheerfully refreshes right after issuing commands.
 - `includeDeviceIds` – optional list of AUX endpoint IDs to expose. Leave empty to include everything.
 - `excludeDeviceIds` – optional list to hide specific devices (handy if you only want HVAC and not the accompanying water heater, for example).
@@ -57,8 +56,9 @@ The configuration schema (`config.schema.json`) surfaces the same options inside
   - Power control (`Active`)
   - Mode selection (Auto / Heat / Cool)
   - Ambient temperature, cooling/heating setpoints in °C or °F with configurable steps
-  - Fan speed mapped to a discrete slider
-  - Optional switches for screen display, comfortable wind (auto fan), mildew proof, self-clean, health, eco, and sleep modes
+  - Fan speed mapped to a discrete slider (0 % comfortable wind, 20–100 % for mute → turbo, plus a dedicated Auto switch)
+  - Dedicated Dry Mode and Fan Mode switches that are mutually exclusive and fall back to Auto when off
+  - Optional switches for screen display, mildew proof, self-clean, health, eco, and sleep modes
 - Support for manual include/exclude lists, with automatic removal of offline devices from Homebridge.
 - Fast polling loop with back-off on errors.
 - Ready for incremental expansion (eco/comfort modes, screen toggles, heat pumps, WebSocket push updates).

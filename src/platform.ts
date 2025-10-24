@@ -14,7 +14,6 @@ import { PLATFORM_NAME, PLUGIN_NAME } from './settings';
 
 export type FeatureSwitchKey =
   | 'screenDisplay'
-  | 'comfortableWind'
   | 'mildewProof'
   | 'clean'
   | 'health'
@@ -23,7 +22,6 @@ export type FeatureSwitchKey =
 
 const ALLOWED_FEATURE_SWITCHES: FeatureSwitchKey[] = [
   'screenDisplay',
-  'comfortableWind',
   'mildewProof',
   'clean',
   'health',
