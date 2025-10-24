@@ -1,9 +1,6 @@
 import type { Characteristic, CharacteristicValue, PlatformAccessory, Service } from 'homebridge';
 
 import {
-  AC_CHILD_LOCK,
-  AC_CHILD_LOCK_OFF,
-  AC_CHILD_LOCK_ON,
   AC_CLEAN,
   AC_CLEAN_OFF,
   AC_CLEAN_ON,
@@ -34,6 +31,7 @@ import {
   AC_SWING_VERTICAL_ON,
   AC_TEMPERATURE_AMBIENT,
   AC_TEMPERATURE_TARGET,
+  AC_MODE_SPECIAL,
   AUX_ECOMODE,
   AUX_ECOMODE_OFF,
   AUX_ECOMODE_ON,
@@ -60,14 +58,14 @@ const CURRENT_TEMPERATURE_MIN_C = -40;
 const CURRENT_TEMPERATURE_MAX_C = 60;
 const FAN_ROTATION_STEP = 20;
 
-const FAN_SPEED_LEVELS: Array<{ aux: AuxFanSpeed; percent: number }> = [
-  { aux: AuxFanSpeed.AUTO, percent: 0 },
+const MANUAL_FAN_SPEED_LEVELS: Array<{ aux: AuxFanSpeed; percent: number }> = [
   { aux: AuxFanSpeed.MUTE, percent: 20 },
   { aux: AuxFanSpeed.LOW, percent: 40 },
   { aux: AuxFanSpeed.MEDIUM, percent: 60 },
   { aux: AuxFanSpeed.HIGH, percent: 80 },
   { aux: AuxFanSpeed.TURBO, percent: 100 },
 ];
+const DEFAULT_MANUAL_FAN_SPEED = AuxFanSpeed.MEDIUM;
 
 const roundToOneDecimal = (value: number): number => Math.round(value * 10) / 10;
 const clamp = (value: number, min: number, max: number): number => Math.min(max, Math.max(min, value));
@@ -149,9 +147,11 @@ export class AuxCloudPlatformAccessory {
 
   private supportsSwingHorizontal = false;
 
-  private supportsChildLock = false;
-
   private hasFault = false;
+
+  private fanAutoService?: Service;
+
+  private lastManualFanSpeed: AuxFanSpeed = DEFAULT_MANUAL_FAN_SPEED;
 
   constructor(
     private readonly platform: AuxCloudPlatform,
@@ -213,11 +213,14 @@ export class AuxCloudPlatformAccessory {
     this.supportsFanSpeed = typeof device.params[AC_FAN_SPEED] === 'number';
     this.supportsSwingVertical = typeof device.params[AC_SWING_VERTICAL] === 'number';
     this.supportsSwingHorizontal = typeof device.params[AC_SWING_HORIZONTAL] === 'number';
-    this.supportsChildLock = typeof device.params[AC_CHILD_LOCK] === 'number';
+    const currentFan = device.params[AC_FAN_SPEED];
+    if (typeof currentFan === 'number' && currentFan !== AuxFanSpeed.AUTO) {
+      this.lastManualFanSpeed = currentFan as AuxFanSpeed;
+    }
 
     this.configureFanCharacteristic();
+    this.configureFanAutoSwitch();
     this.configureSwingCharacteristic();
-    this.configureChildLockCharacteristic();
     this.configureFeatureSwitches();
 
     this.updateCharacteristicsFromDevice();
@@ -282,12 +285,35 @@ export class AuxCloudPlatformAccessory {
 
     if (this.supportsFanSpeed) {
       const characteristic = existing ?? this.service.addCharacteristic(this.platform.Characteristic.RotationSpeed);
-      characteristic.setProps({ minValue: 0, maxValue: 100, minStep: FAN_ROTATION_STEP });
+      const minValue = MANUAL_FAN_SPEED_LEVELS[0]?.percent ?? FAN_ROTATION_STEP;
+      characteristic.setProps({ minValue, maxValue: 100, minStep: FAN_ROTATION_STEP });
       characteristic.onSet(this.handleRotationSpeedSet.bind(this))
         .onGet(this.handleRotationSpeedGet.bind(this));
     } else if (existing) {
       this.service.removeCharacteristic(existing);
     }
+  }
+
+  private configureFanAutoSwitch(): void {
+    if (!this.supportsFanSpeed) {
+      if (this.fanAutoService) {
+        this.accessory.removeService(this.fanAutoService);
+        this.fanAutoService = undefined;
+      }
+      return;
+    }
+
+    const service =
+      this.fanAutoService
+      ?? this.accessory.getServiceById(this.platform.Service.Switch, 'fanAuto')
+      ?? this.accessory.addService(this.platform.Service.Switch, 'Auto Fan', 'fanAuto');
+
+    service.updateCharacteristic(this.platform.Characteristic.Name, 'Auto Fan');
+    service.getCharacteristic(this.platform.Characteristic.On)
+      .onSet(this.handleFanAutoSet.bind(this))
+      .onGet(this.handleFanAutoGet.bind(this));
+
+    this.fanAutoService = service;
   }
 
   private configureSwingCharacteristic(): void {
@@ -298,18 +324,6 @@ export class AuxCloudPlatformAccessory {
       const characteristic = existing ?? this.service.addCharacteristic(this.platform.Characteristic.SwingMode);
       characteristic.onSet(this.handleSwingModeSet.bind(this))
         .onGet(this.handleSwingModeGet.bind(this));
-    } else if (existing) {
-      this.service.removeCharacteristic(existing);
-    }
-  }
-
-  private configureChildLockCharacteristic(): void {
-    const existing = this.findCharacteristic(this.platform.Characteristic.LockPhysicalControls.UUID);
-
-    if (this.supportsChildLock) {
-      const characteristic = existing ?? this.service.addCharacteristic(this.platform.Characteristic.LockPhysicalControls);
-      characteristic.onSet(this.handleLockPhysicalControlsSet.bind(this))
-        .onGet(this.handleLockPhysicalControlsGet.bind(this));
     } else if (existing) {
       this.service.removeCharacteristic(existing);
     }
@@ -383,13 +397,20 @@ export class AuxCloudPlatformAccessory {
     }
 
     const auxMode = this.mapTargetStateToAuxMode(Number(value));
+    const supportsSpecialModeParam = AuxProducts.getSpecialParamsList(this.device.productId)?.includes(AC_MODE_SPECIAL);
     try {
-      const payload = { ...AC_POWER_ON, [AUX_MODE]: auxMode };
+      const payload: Record<string, number> = { ...AC_POWER_ON, [AUX_MODE]: auxMode };
+      if (supportsSpecialModeParam || typeof this.device.params?.[AC_MODE_SPECIAL] === 'number') {
+        payload[AC_MODE_SPECIAL] = auxMode;
+      }
       await this.platform.sendDeviceParams(this.device, payload);
 
       this.device.params = this.device.params ?? {};
       this.device.params[AC_POWER] = 1;
       this.device.params[AUX_MODE] = auxMode;
+      if (supportsSpecialModeParam || typeof this.device.params[AC_MODE_SPECIAL] === 'number') {
+        this.device.params[AC_MODE_SPECIAL] = auxMode;
+      }
       this.device.state = 1;
       this.platform.updateCachedDevice(this.device);
       this.updateCharacteristicsFromDevice();
@@ -474,8 +495,9 @@ export class AuxCloudPlatformAccessory {
       return;
     }
 
-    const percent = clamp(Number(value), 0, 100);
+    const percent = clamp(Number(value), MANUAL_FAN_SPEED_LEVELS[0]?.percent ?? FAN_ROTATION_STEP, 100);
     const auxSpeed = this.mapRotationToAuxFanSpeed(percent);
+    this.lastManualFanSpeed = auxSpeed;
 
     try {
       await this.platform.sendDeviceParams(this.device, { [AC_FAN_SPEED]: auxSpeed });
@@ -484,6 +506,9 @@ export class AuxCloudPlatformAccessory {
       this.device.params[AC_FAN_SPEED] = auxSpeed;
       this.platform.updateCachedDevice(this.device);
       this.updateCharacteristicsFromDevice();
+      if (this.fanAutoService) {
+        this.fanAutoService.updateCharacteristic(this.platform.Characteristic.On, false);
+      }
       this.setFaulted(false);
     } catch (error) {
       this.handleCommandError('set fan speed', error);
@@ -496,7 +521,44 @@ export class AuxCloudPlatformAccessory {
     }
 
     const raw = this.device.params[AC_FAN_SPEED];
-    return this.mapAuxFanSpeedToRotation(typeof raw === 'number' ? raw : AuxFanSpeed.AUTO);
+    return this.mapAuxFanSpeedToRotation(typeof raw === 'number' ? raw : AuxFanSpeed.MEDIUM);
+  }
+
+  private async handleFanAutoSet(value: CharacteristicValue): Promise<void> {
+    if (!this.device || !this.supportsFanSpeed) {
+      return;
+    }
+
+    const enable = Boolean(value);
+    const previous = this.device.params?.[AC_FAN_SPEED];
+    if (enable && typeof previous === 'number' && previous !== AuxFanSpeed.AUTO) {
+      this.lastManualFanSpeed = previous as AuxFanSpeed;
+    }
+
+    const desiredSpeed = enable ? AuxFanSpeed.AUTO : this.lastManualFanSpeed ?? DEFAULT_MANUAL_FAN_SPEED;
+
+    try {
+      await this.platform.sendDeviceParams(this.device, { [AC_FAN_SPEED]: desiredSpeed });
+
+      this.device.params = this.device.params ?? {};
+      this.device.params[AC_FAN_SPEED] = desiredSpeed;
+      this.platform.updateCachedDevice(this.device);
+      this.updateCharacteristicsFromDevice();
+      if (!enable && desiredSpeed !== AuxFanSpeed.AUTO) {
+        this.lastManualFanSpeed = desiredSpeed;
+      }
+      this.setFaulted(false);
+    } catch (error) {
+      this.handleCommandError(enable ? 'enable auto fan' : 'disable auto fan', error);
+    }
+  }
+
+  private handleFanAutoGet(): CharacteristicValue {
+    if (!this.device || !this.supportsFanSpeed) {
+      return false;
+    }
+
+    return this.device.params[AC_FAN_SPEED] === AuxFanSpeed.AUTO;
   }
 
   private async handleSwingModeSet(value: CharacteristicValue): Promise<void> {
@@ -538,38 +600,6 @@ export class AuxCloudPlatformAccessory {
     return (vertical || horizontal)
       ? this.platform.Characteristic.SwingMode.SWING_ENABLED
       : this.platform.Characteristic.SwingMode.SWING_DISABLED;
-  }
-
-  private async handleLockPhysicalControlsSet(value: CharacteristicValue): Promise<void> {
-    if (!this.device || !this.supportsChildLock) {
-      return;
-    }
-
-    const locked = Number(value) === this.platform.Characteristic.LockPhysicalControls.CONTROL_LOCK_ENABLED;
-    const payload = locked ? AC_CHILD_LOCK_ON : AC_CHILD_LOCK_OFF;
-
-    try {
-      await this.platform.sendDeviceParams(this.device, payload);
-
-      this.device.params = this.device.params ?? {};
-      this.device.params[AC_CHILD_LOCK] = locked ? 1 : 0;
-      this.platform.updateCachedDevice(this.device);
-      this.updateCharacteristicsFromDevice();
-      this.setFaulted(false);
-    } catch (error) {
-      this.handleCommandError('set child lock', error);
-    }
-  }
-
-  private handleLockPhysicalControlsGet(): CharacteristicValue {
-    if (!this.device || !this.supportsChildLock) {
-      return this.platform.Characteristic.LockPhysicalControls.CONTROL_LOCK_DISABLED;
-    }
-
-    const locked = this.device.params[AC_CHILD_LOCK] === 1;
-    return locked
-      ? this.platform.Characteristic.LockPhysicalControls.CONTROL_LOCK_ENABLED
-      : this.platform.Characteristic.LockPhysicalControls.CONTROL_LOCK_DISABLED;
   }
 
   private async handleFeatureSwitchSet(feature: FeatureSwitchKey, enabled: boolean): Promise<void> {
@@ -634,19 +664,18 @@ export class AuxCloudPlatformAccessory {
         this.platform.Characteristic.RotationSpeed,
         this.handleRotationSpeedGet(),
       );
+      if (this.fanAutoService) {
+        this.fanAutoService.updateCharacteristic(
+          this.platform.Characteristic.On,
+          this.handleFanAutoGet(),
+        );
+      }
     }
 
     if (this.supportsSwingHorizontal || this.supportsSwingVertical) {
       this.service.updateCharacteristic(
         this.platform.Characteristic.SwingMode,
         this.handleSwingModeGet(),
-      );
-    }
-
-    if (this.supportsChildLock) {
-      this.service.updateCharacteristic(
-        this.platform.Characteristic.LockPhysicalControls,
-        this.handleLockPhysicalControlsGet(),
       );
     }
 
@@ -663,6 +692,11 @@ export class AuxCloudPlatformAccessory {
   private getAuxMode(): AuxAcModeValue | undefined {
     if (!this.device) {
       return undefined;
+    }
+
+    const special = this.device.params?.[AC_MODE_SPECIAL];
+    if (typeof special === 'number') {
+      return special as AuxAcModeValue;
     }
 
     const raw = this.device.params?.[AUX_MODE];
@@ -711,15 +745,21 @@ export class AuxCloudPlatformAccessory {
   }
 
   private mapAuxFanSpeedToRotation(value: number): number {
-    const entry = FAN_SPEED_LEVELS.find((level) => level.aux === value);
-    return entry ? entry.percent : 0;
+    if (value === AuxFanSpeed.AUTO) {
+      return MANUAL_FAN_SPEED_LEVELS[0]?.percent ?? FAN_ROTATION_STEP;
+    }
+
+    const entry = MANUAL_FAN_SPEED_LEVELS.find((level) => level.aux === value);
+    return entry ? entry.percent : MANUAL_FAN_SPEED_LEVELS[0]?.percent ?? FAN_ROTATION_STEP;
   }
 
-  private mapRotationToAuxFanSpeed(percent: number): number {
-    let closest = FAN_SPEED_LEVELS[0];
+  private mapRotationToAuxFanSpeed(percent: number): AuxFanSpeed {
+    const defaultLevel =
+      MANUAL_FAN_SPEED_LEVELS[0] ?? { aux: DEFAULT_MANUAL_FAN_SPEED, percent };
+    let closest = defaultLevel;
     let smallestDelta = Math.abs(percent - closest.percent);
 
-    for (const level of FAN_SPEED_LEVELS) {
+    for (const level of MANUAL_FAN_SPEED_LEVELS) {
       const delta = Math.abs(percent - level.percent);
       if (delta < smallestDelta) {
         closest = level;

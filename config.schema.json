@@ -75,15 +75,9 @@
       },
       "pollInterval": {
         "title": "Polling Interval (seconds)",
-        "description": "How frequently the plugin should request updated state from AUX Cloud (30-600 seconds).",
+        "description": "How frequently the plugin should request updated state from AUX Cloud (enter a value between 30 and 600 seconds).",
         "type": "integer",
-        "default": 60,
-        "minimum": 30,
-        "maximum": 600,
-        "multipleOf": 1,
-        "ui": {
-          "component": "number"
-        }
+        "default": 60
       },
       "includeDeviceIds": {
         "title": "Included Device IDs",
