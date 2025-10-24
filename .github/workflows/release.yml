@@ -50,25 +50,25 @@ jobs:
           fi
 
           VERSION="$VERSION" node <<'EOF'
-const fs = require('fs');
-const path = require('path');
+          const fs = require('fs');
+          const path = require('path');
 
-const version = process.env.VERSION;
-if (!version) {
-  throw new Error('VERSION environment variable is not set.');
-}
+          const version = process.env.VERSION;
+          if (!version) {
+            throw new Error('VERSION environment variable is not set.');
+          }
 
-const pkgPath = path.resolve('package.json');
-const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+          const pkgPath = path.resolve('package.json');
+          const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
 
-if (pkg.version === version) {
-  console.log(`package.json already at version ${version}`);
-} else {
-  pkg.version = version;
-  fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + '\n');
-  console.log(`Updated package.json to version ${version}`);
-}
-EOF
+          if (pkg.version === version) {
+            console.log(`package.json already at version ${version}`);
+          } else {
+            pkg.version = version;
+            fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + '\n');
+            console.log(`Updated package.json to version ${version}`);
+          }
+          EOF
 
       - name: Build
         run: yarn build
