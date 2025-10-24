@@ -24,12 +24,50 @@ jobs:
         with:
           node-version: '22.14.0'
           cache: 'yarn'
+          registry-url: 'https://registry.npmjs.org'
 
       - name: Enable Corepack
         run: corepack enable
 
       - name: Install dependencies
         run: yarn install --immutable
+
+      - name: Set package version from tag
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          set -euo pipefail
+          if [ -z "$RELEASE_TAG" ]; then
+            echo "Release tag is not available." >&2
+            exit 1
+          fi
+
+          VERSION="${RELEASE_TAG#v}"
+          if [ -z "$VERSION" ]; then
+            echo "Derived version from tag is empty." >&2
+            exit 1
+          fi
+
+          VERSION="$VERSION" node <<'EOF'
+const fs = require('fs');
+const path = require('path');
+
+const version = process.env.VERSION;
+if (!version) {
+  throw new Error('VERSION environment variable is not set.');
+}
+
+const pkgPath = path.resolve('package.json');
+const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+
+if (pkg.version === version) {
+  console.log(`package.json already at version ${version}`);
+} else {
+  pkg.version = version;
+  fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + '\n');
+  console.log(`Updated package.json to version ${version}`);
+}
+EOF
 
       - name: Build
         run: yarn build
@@ -71,10 +109,15 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           NPM_TAG: ${{ steps.dist_tag.outputs.dist_tag }}
+          REGISTRY_URL: 'https://registry.npmjs.org'
         run: |
           if [ -z "$NODE_AUTH_TOKEN" ]; then
             echo "NPM_TOKEN secret is not available. Skipping publish." >&2
             exit 1
           fi
 
-          npm publish --tag "$NPM_TAG"
+          umask 077
+          mkdir -p "$HOME/.npm"
+          printf "//registry.npmjs.org/:_authToken=%s\n" "$NODE_AUTH_TOKEN" > "$HOME/.npmrc"
+
+          npm publish --access public --tag "$NPM_TAG"
