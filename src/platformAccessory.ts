@@ -373,7 +373,7 @@ export class AuxCloudPlatformAccessory {
       return this.platform.Characteristic.Active.INACTIVE;
     }
 
-    const active = this.device.state === 1 || this.device.params[AC_POWER] === 1;
+    const active = this.isDevicePowered();
     return active ? this.platform.Characteristic.Active.ACTIVE : this.platform.Characteristic.Active.INACTIVE;
   }
 
@@ -384,10 +384,13 @@ export class AuxCloudPlatformAccessory {
 
     const auxMode = this.mapTargetStateToAuxMode(Number(value));
     try {
-      await this.platform.sendDeviceParams(this.device, { [AUX_MODE]: auxMode });
+      const payload = { ...AC_POWER_ON, [AUX_MODE]: auxMode };
+      await this.platform.sendDeviceParams(this.device, payload);
 
       this.device.params = this.device.params ?? {};
+      this.device.params[AC_POWER] = 1;
       this.device.params[AUX_MODE] = auxMode;
+      this.device.state = 1;
       this.platform.updateCachedDevice(this.device);
       this.updateCharacteristicsFromDevice();
       this.setFaulted(false);
@@ -400,8 +403,7 @@ export class AuxCloudPlatformAccessory {
     if (!this.device) {
       return this.platform.Characteristic.TargetHeaterCoolerState.AUTO;
     }
-    const auxMode = this.device.params[AUX_MODE];
-    return this.mapAuxModeToTargetState(auxMode);
+    return this.mapAuxModeToTargetState(this.getAuxMode());
   }
 
   private handleCurrentHeaterCoolerStateGet(): CharacteristicValue {
@@ -411,11 +413,11 @@ export class AuxCloudPlatformAccessory {
 
     const { CurrentHeaterCoolerState } = this.platform.Characteristic;
 
-    if (this.device.state !== 1 && this.device.params[AC_POWER] !== 1) {
+    if (!this.isDevicePowered()) {
       return CurrentHeaterCoolerState.INACTIVE;
     }
 
-    const auxMode = this.device.params[AUX_MODE];
+    const auxMode = this.getAuxMode();
     switch (auxMode) {
       case AuxAcModeValue.HEATING:
         return CurrentHeaterCoolerState.HEATING;
@@ -431,10 +433,11 @@ export class AuxCloudPlatformAccessory {
     const valueC = celsius ?? DEFAULT_TEMPERATURE_C;
 
     if (this.temperatureUnit === 'F') {
-      return roundToOneDecimal(celsiusToDisplay(valueC, 'F'));
+      const fahrenheit = (valueC * 9) / 5 + 32;
+      return Math.round(fahrenheit * 10) / 10;
     }
 
-    return Number((valueC).toFixed(1));
+    return Math.round(valueC * 10) / 10;
   }
 
   private async handleTargetTemperatureSet(value: CharacteristicValue): Promise<void> {
@@ -655,6 +658,31 @@ export class AuxCloudPlatformAccessory {
     }
 
     this.setFaulted(false);
+  }
+
+  private getAuxMode(): AuxAcModeValue | undefined {
+    if (!this.device) {
+      return undefined;
+    }
+
+    const raw = this.device.params?.[AUX_MODE];
+    return typeof raw === 'number' ? (raw as AuxAcModeValue) : undefined;
+  }
+
+  private isDevicePowered(): boolean {
+    if (!this.device) {
+      return false;
+    }
+
+    const powerParam = this.device.params?.[AC_POWER];
+    if (powerParam === 1) {
+      return true;
+    }
+    if (powerParam === 0) {
+      return false;
+    }
+
+    return this.device.state === 1;
   }
 
   private mapTargetStateToAuxMode(value: number): number {
