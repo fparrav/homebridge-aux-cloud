@@ -1,8 +1,10 @@
 # Changelog
 
-## 0.0.2-beta.10 - 2025-10-24
+## 0.0.2-beta.13 - 2025-10-27
 
-**Full Changelog**: https://github.com/fparrav/homebridge-aux-cloud/compare/0.0.2-beta.9...0.0.2-beta.10
+**Full Changelog**: https://github.com/fparrav/homebridge-aux-cloud/compare/0.0.2-beta.12...0.0.2-beta.13
+
+- Prevent the device from falling back to Auto when starting Heating from Off by powering on before updating the target mode.
 
 ## 0.0.2-beta.12 - 2025-10-24
 
@@ -16,6 +18,10 @@
 - Stop publishing the redundant child-lock control that HomeKit already shows as a built-in property.
 - Fold the “Comfortable Wind” setting into the fan-speed slider (0% = Comfortable, 20–100% = Mute→Turbo) without powering the unit off.
 - Add dedicated Dry Mode and Fan Mode switches that are mutually exclusive and fall back to Auto when both are off.
+
+## 0.0.2-beta.10 - 2025-10-24
+
+**Full Changelog**: https://github.com/fparrav/homebridge-aux-cloud/compare/0.0.2-beta.9...0.0.2-beta.10
 
 ## 0.0.1
 - Initial project scaffold generated from the Homebridge plugin template.

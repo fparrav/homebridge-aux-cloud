@@ -840,13 +840,16 @@ export class AuxCloudPlatformAccessory {
     }
 
     const supportsSpecialModeParam = AuxProducts.getSpecialParamsList(this.device.productId)?.includes(AC_MODE_SPECIAL);
-    const payload: Record<string, number> = { [AUX_MODE]: auxMode };
+    const shouldSendSpecialModeParam = supportsSpecialModeParam || typeof this.device.params?.[AC_MODE_SPECIAL] === 'number';
+    const payload: Record<string, number> = {};
 
     if (ensurePowerOn) {
       Object.assign(payload, AC_POWER_ON);
     }
 
-    if (supportsSpecialModeParam || typeof this.device.params?.[AC_MODE_SPECIAL] === 'number') {
+    payload[AUX_MODE] = auxMode;
+
+    if (shouldSendSpecialModeParam) {
       payload[AC_MODE_SPECIAL] = auxMode;
     }
 
@@ -854,7 +857,7 @@ export class AuxCloudPlatformAccessory {
 
     this.device.params = this.device.params ?? {};
     this.device.params[AUX_MODE] = auxMode;
-    if (supportsSpecialModeParam || typeof this.device.params[AC_MODE_SPECIAL] === 'number') {
+    if (shouldSendSpecialModeParam) {
       this.device.params[AC_MODE_SPECIAL] = auxMode;
     }
     if (ensurePowerOn) {
