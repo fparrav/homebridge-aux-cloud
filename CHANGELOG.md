@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.0.2-beta.15 - 2025-10-27
+
+**Full Changelog**: https://github.com/fparrav/homebridge-aux-cloud/compare/0.0.2-beta.14...0.0.2-beta.15
+
+- Pin semantic-release packages to Node.js 20-compatible versions to restore the release workflow.
+
 ## 0.0.2-beta.14 - 2025-10-27
 
 **Full Changelog**: https://github.com/fparrav/homebridge-aux-cloud/compare/0.0.2-beta.13...0.0.2-beta.14
