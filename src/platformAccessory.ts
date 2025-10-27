@@ -77,6 +77,9 @@ const DEFAULT_MANUAL_FAN_SPEED = AuxFanSpeed.MEDIUM;
 
 const roundToOneDecimal = (value: number): number => Math.round(value * 10) / 10;
 const clamp = (value: number, min: number, max: number): number => Math.min(max, Math.max(min, value));
+const delay = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+
+const MODE_RETRY_DELAY_MS = 1_200;
 
 const celsiusToDisplay = (celsius: number, unit: 'C' | 'F'): number =>
   unit === 'F' ? roundToOneDecimal((celsius * 9) / 5 + 32) : roundToOneDecimal(celsius);
@@ -158,6 +161,10 @@ export class AuxCloudPlatformAccessory {
   private readonly modeSwitchServices = new Map<'dry' | 'fan', Service>();
 
   private lastManualFanSpeed: AuxFanSpeed = DEFAULT_MANUAL_FAN_SPEED;
+
+  private pendingModeTimeout?: NodeJS.Timeout;
+
+  private pendingAuxMode?: AuxAcModeValue;
 
   constructor(
     private readonly platform: AuxCloudPlatform,
@@ -474,6 +481,10 @@ export class AuxCloudPlatformAccessory {
     if (!this.device) {
       return this.platform.Characteristic.TargetHeaterCoolerState.AUTO;
     }
+    const pending = this.pendingAuxMode;
+    if (typeof pending === 'number') {
+      return this.mapAuxModeToTargetState(pending);
+    }
     return this.mapAuxModeToTargetState(this.getAuxMode());
   }
 
@@ -775,6 +786,16 @@ export class AuxCloudPlatformAccessory {
 
     const auxMode = this.getAuxMode();
 
+    if (this.pendingAuxMode !== undefined) {
+      if (auxMode === this.pendingAuxMode) {
+        this.pendingAuxMode = undefined;
+        if (this.pendingModeTimeout) {
+          clearTimeout(this.pendingModeTimeout);
+          this.pendingModeTimeout = undefined;
+        }
+      }
+    }
+
     this.service.updateCharacteristic(this.platform.Characteristic.Active, this.handleActiveGet());
     this.service.updateCharacteristic(
       this.platform.Characteristic.TargetHeaterCoolerState,
@@ -839,31 +860,71 @@ export class AuxCloudPlatformAccessory {
       return;
     }
 
-    const supportsSpecialModeParam = AuxProducts.getSpecialParamsList(this.device.productId)?.includes(AC_MODE_SPECIAL);
-    const shouldSendSpecialModeParam = supportsSpecialModeParam || typeof this.device.params?.[AC_MODE_SPECIAL] === 'number';
-    const payload: Record<string, number> = {};
-
-    if (ensurePowerOn) {
-      Object.assign(payload, AC_POWER_ON);
+    if (this.pendingModeTimeout) {
+      clearTimeout(this.pendingModeTimeout);
+      this.pendingModeTimeout = undefined;
     }
 
-    payload[AUX_MODE] = auxMode;
+    const supportsSpecialModeParam =
+      AuxProducts.getSpecialParamsList(this.device.productId)?.includes(AC_MODE_SPECIAL);
+    const shouldSendSpecialModeParam =
+      supportsSpecialModeParam || typeof this.device.params?.[AC_MODE_SPECIAL] === 'number';
+
+    this.pendingAuxMode = auxMode;
+
+    const shouldPowerOn = ensurePowerOn && !this.isDevicePowered();
+    if (shouldPowerOn) {
+      try {
+        await this.platform.sendDeviceParams(this.device, AC_POWER_ON);
+
+        this.device.params = this.device.params ?? {};
+        this.device.params[AC_POWER] = 1;
+        this.device.state = 1;
+
+        await delay(400);
+      } catch (error) {
+        this.pendingAuxMode = undefined;
+        throw error;
+      }
+    }
+
+    const payload: Record<string, number> = {
+      [AUX_MODE]: auxMode,
+    };
 
     if (shouldSendSpecialModeParam) {
       payload[AC_MODE_SPECIAL] = auxMode;
     }
-
-    await this.platform.sendDeviceParams(this.device, payload);
-
-    this.device.params = this.device.params ?? {};
-    this.device.params[AUX_MODE] = auxMode;
-    if (shouldSendSpecialModeParam) {
-      this.device.params[AC_MODE_SPECIAL] = auxMode;
+    try {
+      await this.platform.sendDeviceParams(this.device, payload);
+    } catch (error) {
+      this.pendingAuxMode = undefined;
+      throw error;
     }
-    if (ensurePowerOn) {
-      this.device.params[AC_POWER] = 1;
-      this.device.state = 1;
-    }
+
+    this.pendingModeTimeout = setTimeout(async () => {
+      this.pendingModeTimeout = undefined;
+
+      if (!this.device) {
+        return;
+      }
+
+      if (this.pendingAuxMode !== auxMode) {
+        return;
+      }
+
+      const currentMode = this.device.params?.[AUX_MODE];
+      if (typeof currentMode === 'number' && currentMode === auxMode) {
+        this.pendingAuxMode = undefined;
+        return;
+      }
+
+      try {
+        await this.platform.sendDeviceParams(this.device, payload);
+      } catch (error) {
+        this.handleCommandError('retry set mode', error);
+      }
+    }, MODE_RETRY_DELAY_MS);
   }
 
   private getAuxMode(): AuxAcModeValue | undefined {
@@ -871,13 +932,17 @@ export class AuxCloudPlatformAccessory {
       return undefined;
     }
 
+    const raw = this.device.params?.[AUX_MODE];
+    if (typeof raw === 'number') {
+      return raw as AuxAcModeValue;
+    }
+
     const special = this.device.params?.[AC_MODE_SPECIAL];
     if (typeof special === 'number') {
       return special as AuxAcModeValue;
     }
 
-    const raw = this.device.params?.[AUX_MODE];
-    return typeof raw === 'number' ? (raw as AuxAcModeValue) : undefined;
+    return undefined;
   }
 
   private isDevicePowered(): boolean {
