@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.0.2-beta.14 - 2025-10-27
+
+**Full Changelog**: https://github.com/fparrav/homebridge-aux-cloud/compare/0.0.2-beta.13...0.0.2-beta.14
+
+- Fix the release workflow by targeting Node.js 20.19 and pinning semantic-release packages for compatibility.
+
 ## 0.0.2-beta.13 - 2025-10-27
 
 **Full Changelog**: https://github.com/fparrav/homebridge-aux-cloud/compare/0.0.2-beta.12...0.0.2-beta.13
