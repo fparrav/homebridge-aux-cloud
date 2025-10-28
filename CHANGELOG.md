@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.0.2 - 2025-10-28
+
+## What's Changed
+- Ensure AUX mode changes wait for AUX Cloud confirmation and retry automatically so HomeKit stays in sync
+- Handle power-on and mode commands separately to avoid falling back to Auto when resuming from Off
+- Refresh cached device state more quickly after parameter writes
+- Require Node.js 20+ and Homebridge 1.7+ to match the supported LTS releases
+- Harden the release workflow and dependency stack for long-term support
+
+**Full Changelog**: https://github.com/fparrav/homebridge-homebridge-aux-cloud/compare/0.0.2-beta.26...0.0.2
+
 ## 0.0.2 - 2025-10-27
 
 **Full Changelog**: https://github.com/fparrav/homebridge-aux-cloud/compare/0.0.1...0.0.2
