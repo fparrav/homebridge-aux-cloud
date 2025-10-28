@@ -77,13 +77,31 @@ interface DeviceQueryOptions {
 
 type QueryStateResponse = {
   event: {
+    header?: {
+      name?: string;
+    };
     payload: {
       status: number;
       studata: Array<{ did: string; state: number }>;
       data?: Array<{ did: string; state: number }>;
+      message?: string;
     };
   };
 };
+
+export class AuxApiError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'AuxApiError';
+  }
+}
+
+export class AuxNetworkTimeoutError extends AuxApiError {
+  constructor(message: string) {
+    super(message);
+    this.name = 'AuxNetworkTimeoutError';
+  }
+}
 
 export class AuxCloudClient {
   private readonly http: AxiosInstance;
@@ -367,6 +385,15 @@ export class AuxCloudClient {
 
     const payload = response.event?.payload;
 
+    if (response.event?.header?.name === 'ErrorResponse') {
+      const status = payload?.status;
+      const message = payload?.message ?? 'Unknown error querying device state';
+      if (status === -49001) {
+        throw new AuxNetworkTimeoutError(message);
+      }
+      throw new AuxApiError(message);
+    }
+
     if (!payload || payload.status !== 0) {
       throw new Error(`Failed to query device state: ${JSON.stringify(response)}`);
     }
@@ -434,8 +461,13 @@ export class AuxCloudClient {
 
     const response = await this.request<{
       event: {
+        header?: {
+          name?: string;
+        };
         payload?: {
           data?: string;
+          status?: number;
+          message?: string;
         };
       };
     }>({
@@ -445,6 +477,15 @@ export class AuxCloudClient {
       params: { license: LICENSE },
       data: payload,
     });
+
+    if (response.event?.header?.name === 'ErrorResponse') {
+      const status = response.event.payload?.status;
+      const message = response.event.payload?.message ?? 'Unknown error querying params';
+      if (status === -49001) {
+        throw new AuxNetworkTimeoutError(message);
+      }
+      throw new AuxApiError(message);
+    }
 
     const encodedData = response.event?.payload?.data;
     if (!encodedData) {

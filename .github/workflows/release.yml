@@ -2,13 +2,17 @@ name: Release
 
 on:
   release:
-    types: [published]
+    types:
+      - published
 
 env:
   YARN_CHECKSUM_BEHAVIOR: update
 
 jobs:
   publish:
+    if: github.event_name == 'release'
+    permissions:
+      contents: write
     runs-on: ubuntu-latest
 
     steps:
@@ -16,21 +20,189 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          ref: ${{ github.event.release.target_commitish }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '20.19.0'
           cache: 'yarn'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Enable Corepack
+        run: corepack enable
 
       - name: Install dependencies
         run: yarn install --immutable
 
+      - name: Set package version from tag
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          set -euo pipefail
+          if [ -z "$RELEASE_TAG" ]; then
+            echo "Release tag is not available." >&2
+            exit 1
+          fi
+
+          VERSION="${RELEASE_TAG#v}"
+          if [ -z "$VERSION" ]; then
+            echo "Derived version from tag is empty." >&2
+            exit 1
+          fi
+
+          VERSION="$VERSION" node <<'EOF'
+          const fs = require('fs');
+          const path = require('path');
+
+          const version = process.env.VERSION;
+          if (!version) {
+            throw new Error('VERSION environment variable is not set.');
+          }
+
+          const pkgPath = path.resolve('package.json');
+          const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+
+          if (pkg.version === version) {
+            console.log(`package.json already at version ${version}`);
+          } else {
+            pkg.version = version;
+            fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + '\n');
+            console.log(`Updated package.json to version ${version}`);
+          }
+          EOF
+
+      - name: Update changelog from release notes
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          RELEASE_NAME: ${{ github.event.release.name }}
+          RELEASE_BODY: ${{ github.event.release.body }}
+        run: |
+          set -euo pipefail
+          node <<'EOF'
+          const fs = require('fs');
+          const path = require('path');
+
+          const tag = process.env.RELEASE_TAG;
+          const name = process.env.RELEASE_NAME;
+          const body = (process.env.RELEASE_BODY || '').replace(/\r\n/g, '\n').trim();
+
+          if (!tag) {
+            throw new Error('RELEASE_TAG is not available.');
+          }
+
+          const displayName = name && name.trim().length > 0 ? name.trim() : tag;
+          const today = new Date().toISOString().slice(0, 10);
+          const changelogPath = path.resolve('CHANGELOG.md');
+
+          let changelog = '';
+          if (fs.existsSync(changelogPath)) {
+            changelog = fs.readFileSync(changelogPath, 'utf8');
+          }
+
+          const normalized = changelog.replace(/\r\n/g, '\n').trim();
+          const heading = '# Changelog';
+          const entryHeading = `## ${displayName} - ${today}`;
+          if (normalized.includes(entryHeading)) {
+            console.log(`Changelog already contains entry for ${entryHeading}`);
+            process.exit(0);
+          }
+
+          const entryBody = body.length > 0 ? body : '- No release notes provided.';
+          const entry = `${entryHeading}\n\n${entryBody}\n\n`;
+
+          let updated = normalized;
+          if (!normalized.startsWith(heading)) {
+            updated = `${heading}\n\n${normalized}`.trim() + '\n';
+          }
+
+          if (updated.length === 0) {
+            updated = `${heading}\n\n`;
+          }
+
+          const [, ...restLines] = updated.split('\n');
+          const rest = restLines.join('\n').trimStart();
+          const finalContent = `${heading}\n\n${entry}${rest ? `${rest}\n` : ''}`;
+
+          fs.writeFileSync(changelogPath, finalContent.trimEnd() + '\n');
+          console.log(`Added changelog entry for ${entryHeading}`);
+          EOF
+
       - name: Build
         run: yarn build
 
-      - name: Publish with semantic-release
+      - name: Detect npm dist-tag
+        id: dist_tag
+        run: |
+          set -euo pipefail
+          TARGET_BRANCH="${{ github.event.release.target_commitish }}"
+          if [ -z "$TARGET_BRANCH" ]; then
+            echo "Unable to detect target branch for release." >&2
+            exit 1
+          fi
+
+          LOWER_BRANCH=$(echo "$TARGET_BRANCH" | tr '[:upper:]' '[:lower:]')
+
+          case "$LOWER_BRANCH" in
+            main|master)
+              DIST_TAG="latest"
+              ;;
+            beta|beta/*)
+              DIST_TAG="beta"
+              ;;
+            *)
+              if [[ "$LOWER_BRANCH" =~ ^[0-9a-f]{40}$ ]]; then
+                DIST_TAG="next"
+              else
+                SANITIZED=$(echo "$LOWER_BRANCH" | tr '/ ' '-')
+                DIST_TAG="${SANITIZED}"
+              fi
+              ;;
+          esac
+
+          echo "Target branch: $TARGET_BRANCH"
+          echo "Dist-tag: $DIST_TAG"
+          echo "dist_tag=$DIST_TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Publish to npm
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          YARN_NPM_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: npx semantic-release
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NPM_TAG: ${{ steps.dist_tag.outputs.dist_tag }}
+          REGISTRY_URL: 'https://registry.npmjs.org'
+        run: |
+          if [ -z "$NODE_AUTH_TOKEN" ]; then
+            echo "NPM_TOKEN secret is not available. Skipping publish." >&2
+            exit 1
+          fi
+
+          umask 077
+          mkdir -p "$HOME/.npm"
+          printf "//registry.npmjs.org/:_authToken=%s\n" "$NODE_AUTH_TOKEN" > "$HOME/.npmrc"
+
+          npm publish --access public --tag "$NPM_TAG"
+
+      - name: Commit and push metadata updates
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          TARGET_BRANCH: ${{ github.event.release.target_commitish }}
+        run: |
+          set -euo pipefail
+
+          git status --short
+          git add CHANGELOG.md package.json || true
+
+          if git diff --cached --quiet; then
+            echo "No metadata changes to commit."
+            exit 0
+          fi
+
+          if ! git ls-remote --exit-code --heads origin "$TARGET_BRANCH"; then
+            echo "Remote branch '$TARGET_BRANCH' not found. Skipping push."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git commit -m "chore(release): ${RELEASE_TAG} changelog update"
+          git push origin HEAD:"$TARGET_BRANCH"

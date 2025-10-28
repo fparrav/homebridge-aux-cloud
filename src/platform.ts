@@ -8,13 +8,12 @@ import type {
   Service,
 } from 'homebridge';
 
-import { AuxCloudClient, type AuxDevice } from './api/AuxCloudClient';
+import { AuxCloudClient, AuxNetworkTimeoutError, type AuxDevice } from './api/AuxCloudClient';
 import { AuxCloudPlatformAccessory } from './platformAccessory';
 import { PLATFORM_NAME, PLUGIN_NAME } from './settings';
 
 export type FeatureSwitchKey =
   | 'screenDisplay'
-  | 'comfortableWind'
   | 'mildewProof'
   | 'clean'
   | 'health'
@@ -23,7 +22,6 @@ export type FeatureSwitchKey =
 
 const ALLOWED_FEATURE_SWITCHES: FeatureSwitchKey[] = [
   'screenDisplay',
-  'comfortableWind',
   'mildewProof',
   'clean',
   'health',
@@ -138,8 +136,20 @@ export class AuxCloudPlatform implements DynamicPlatformPlugin {
   }
 
   public async sendDeviceParams(device: AuxDevice, params: Record<string, number>): Promise<void> {
-    await this.client.setDeviceParams(device, params);
-    this.requestRefresh(2_000);
+    try {
+      await this.client.setDeviceParams(device, params);
+      this.requestRefresh(4_000);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (error instanceof AuxNetworkTimeoutError) {
+        this.log.warn('Timed out sending params to %s: %s', device.endpointId, message);
+      } else {
+        this.log.error('Failed to send params to %s: %s', device.endpointId, message);
+      }
+
+      this.requestRefresh(5_000);
+      throw error;
+    }
   }
 
   public requestRefresh(delayMs = 1_500): void {
@@ -205,8 +215,22 @@ export class AuxCloudPlatform implements DynamicPlatformPlugin {
     const seen = new Set<string>();
 
     for (const device of devices) {
-      const isKnownDevice = this.devicesById.has(device.endpointId);
-      this.devicesById.set(device.endpointId, device);
+      const existingDevice = this.devicesById.get(device.endpointId);
+      const mergedDevice = existingDevice
+        ? {
+          ...existingDevice,
+          ...device,
+          params: this.mergeParams(existingDevice.params, device.params),
+          state: device.state ?? existingDevice.state,
+          lastUpdated: device.lastUpdated ?? existingDevice.lastUpdated,
+        }
+        : {
+          ...device,
+          params: device.params ?? {},
+        };
+
+      const isKnownDevice = Boolean(existingDevice);
+      this.devicesById.set(device.endpointId, mergedDevice);
       const uuid = this.api.hap.uuid.generate(device.endpointId);
       seen.add(uuid);
 
@@ -227,25 +251,25 @@ export class AuxCloudPlatform implements DynamicPlatformPlugin {
 
       if (existingAccessory) {
         existingAccessory.context.device = {
-          endpointId: device.endpointId,
-          productId: device.productId,
-          friendlyName: device.friendlyName,
+          endpointId: mergedDevice.endpointId,
+          productId: mergedDevice.productId,
+          friendlyName: mergedDevice.friendlyName,
         };
 
         const handler = this.handlers.get(existingAccessory.UUID) ?? new AuxCloudPlatformAccessory(this, existingAccessory);
-        handler.updateAccessory(device);
+        handler.updateAccessory(mergedDevice);
         this.handlers.set(existingAccessory.UUID, handler);
       } else {
-        this.log.info('Adding new accessory: %s', device.friendlyName);
-        const accessory = new this.api.platformAccessory(device.friendlyName, uuid);
+        this.log.info('Adding new accessory: %s', mergedDevice.friendlyName);
+        const accessory = new this.api.platformAccessory(mergedDevice.friendlyName, uuid);
         accessory.context.device = {
-          endpointId: device.endpointId,
-          productId: device.productId,
-          friendlyName: device.friendlyName,
+          endpointId: mergedDevice.endpointId,
+          productId: mergedDevice.productId,
+          friendlyName: mergedDevice.friendlyName,
         };
 
         const handler = new AuxCloudPlatformAccessory(this, accessory);
-        handler.updateAccessory(device);
+        handler.updateAccessory(mergedDevice);
 
         this.accessories.push(accessory);
         this.handlers.set(accessory.UUID, handler);
@@ -266,5 +290,22 @@ export class AuxCloudPlatform implements DynamicPlatformPlugin {
         }
       }
     }
+  }
+
+  private mergeParams(
+    existing: Record<string, number> | undefined,
+    incoming: Record<string, number> | undefined,
+  ): Record<string, number> {
+    const merged: Record<string, number> = { ...(existing ?? {}) };
+
+    if (incoming) {
+      for (const [key, value] of Object.entries(incoming)) {
+        if (typeof value === 'number' && !Number.isNaN(value)) {
+          merged[key] = value;
+        }
+      }
+    }
+
+    return merged;
   }
 }

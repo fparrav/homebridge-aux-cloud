@@ -63,7 +63,6 @@
           "type": "string",
           "enum": [
             "screenDisplay",
-            "comfortableWind",
             "mildewProof",
             "clean",
             "health",
@@ -71,15 +70,13 @@
             "sleep"
           ]
         },
-        "description": "Expose optional HomeKit switches for AUX features like screen display, comfortable wind, mildew prevention, self-clean, health, eco, and sleep modes."
+        "description": "Expose optional HomeKit switches for AUX features like screen display, mildew prevention, self-clean, health, eco, and sleep modes."
       },
       "pollInterval": {
         "title": "Polling Interval (seconds)",
-        "description": "How frequently the plugin should request updated state from AUX Cloud.",
+        "description": "How frequently the plugin should request updated state from AUX Cloud (enter a value between 30 and 600 seconds).",
         "type": "integer",
-        "default": 60,
-        "minimum": 30,
-        "maximum": 600
+        "default": 60
       },
       "includeDeviceIds": {
         "title": "Included Device IDs",
