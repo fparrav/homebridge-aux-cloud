@@ -7,6 +7,8 @@ This project is a TypeScript port of the excellent Home Assistant integration [m
 
 The plugin is published on npm as [`homebridge-aux-cloud`](https://www.npmjs.com/package/homebridge-aux-cloud).
 
+> **Requirements:** Node.js 20.x or 22.x (LTS) and Homebridge 1.7.0 or newer.
+
 ```bash
 # Install (or update) globally for Homebridge
 sudo npm install -g homebridge-aux-cloud
