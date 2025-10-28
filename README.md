@@ -1,7 +1,6 @@
-[![verified-by-homebridge](https://badgen.net/badge/homebridge/verified/purple)](https://github.com/homebridge/homebridge/wiki/Verified-Plugins)
 [![npm](https://badgen.net/npm/v/homebridge-aux-cloud/latest?icon=npm&label)](https://www.npmjs.com/package/homebridge-aux-cloud)
 [![npm](https://badgen.net/npm/dt/homebridge-aux-cloud?label=downloads)](https://www.npmjs.com/package/homebridge-aux-cloud)
-[![Donate](https://badgen.net/badge/donate/paypal/yellow)](https://paypal.me/fparrav)
+[![Donate](https://badgen.net/badge/donate/paypal/yellow)](https://paypal.me/feparrav)
 
 # Homebridge AUX Cloud Platform
 
