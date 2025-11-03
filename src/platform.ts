@@ -60,6 +60,8 @@ export class AuxCloudPlatform implements DynamicPlatformPlugin {
 
   private readonly excludeIds: Set<string>;
 
+  private readonly credentialsConfigured: boolean;
+
   public readonly temperatureUnit: 'C' | 'F';
 
   public readonly temperatureStep: number;
@@ -81,7 +83,12 @@ export class AuxCloudPlatform implements DynamicPlatformPlugin {
     config: PlatformConfig,
     public readonly api: API,
   ) {
-    this.config = config as AuxCloudPlatformConfig;
+    this.config = (config ?? {}) as AuxCloudPlatformConfig;
+    this.credentialsConfigured = Boolean(this.config.username && this.config.password);
+    if (!this.credentialsConfigured) {
+      this.log.info('AUX Cloud plugin is installed but not configured; skipping initialization until credentials are provided.');
+    }
+
     this.includeIds = new Set(this.config.includeDeviceIds ?? []);
     this.excludeIds = new Set(this.config.excludeDeviceIds ?? []);
 
@@ -107,6 +114,10 @@ export class AuxCloudPlatform implements DynamicPlatformPlugin {
     this.log.debug('Finished initializing platform: %s', this.config.name);
 
     this.api.on('didFinishLaunching', () => {
+      if (!this.credentialsConfigured) {
+        return;
+      }
+
       void this.initialize();
     });
   }
@@ -163,11 +174,6 @@ export class AuxCloudPlatform implements DynamicPlatformPlugin {
   }
 
   private async initialize(): Promise<void> {
-    if (!this.config.username || !this.config.password) {
-      this.log.error('AUX Cloud credentials are not configured. Please update the plugin settings.');
-      return;
-    }
-
     await this.refreshDevices();
 
     const intervalSeconds = this.validatePollInterval(this.config.pollInterval);
