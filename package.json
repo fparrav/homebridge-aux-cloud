@@ -1,10 +1,17 @@
 {
   "name": "homebridge-aux-cloud",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "description": "Homebridge plugin for AUX Cloud appliances (ported from maeek/ha-aux-cloud).",
   "license": "MIT",
   "keywords": [
-    "homebridge-plugin"
+    "homebridge-plugin",
+    "homebridge-platform",
+    "aux",
+    "aux-cloud",
+    "air-conditioner",
+    "hvac",
+    "homekit",
+    "smart-home"
   ],
   "repository": {
     "type": "git",

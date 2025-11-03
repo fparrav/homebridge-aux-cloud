@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.0.4 - 2025-11-03
+
+- Expand npm keywords so the Homebridge verification bot can classify the plugin correctly.
+
 ## 0.0.3 - 2025-11-03
 
 - Prevent the platform from initializing until AUX Cloud credentials are configured so Homebridge keeps running after fresh installs.
