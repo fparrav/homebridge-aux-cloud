@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.0.5 - 2025-12-06
+
+- Add Homebridge verified badge and funding metadata/donation links for AUX Cloud so the plugin appears trusted alongside the new support info.
+
 ## 0.0.4 - 2025-11-03
 
 - Expand npm keywords so the Homebridge verification bot can classify the plugin correctly.
