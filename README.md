@@ -1,4 +1,4 @@
-[![verified-by-homebridge](https://img.shields.io/badge/homebridge-verified-blueviolet?color=%23491F59&style=for-the-badge&logoColor=%23FFFFFF&logo=homebridge)](https://github.com/homebridge/homebridge/wiki/Verified-Plugins)
+[![verified-by-homebridge](https://img.shields.io/badge/homebridge-verified-blueviolet?color=%23491F59&style=flat)](https://github.com/homebridge/homebridge/wiki/Verified-Plugins)
 [![npm version](https://badgen.net/npm/v/homebridge-aux-cloud)](https://www.npmjs.com/package/homebridge-aux-cloud)
 [![npm](https://badgen.net/npm/dt/homebridge-aux-cloud?label=downloads)](https://www.npmjs.com/package/homebridge-aux-cloud)
 [![Donate](https://badgen.net/badge/donate/paypal/yellow)](https://paypal.me/feparrav)
