@@ -110,6 +110,8 @@ export class AuxCloudClient {
 
   private readonly region: string;
 
+  private readonly requestTimeoutMs: number;
+
   private identifier?: string;
 
   private password?: string;
@@ -123,10 +125,11 @@ export class AuxCloudClient {
   constructor(options: AuxCloudClientOptions = {}) {
     this.region = options.region && REGION_URLS[options.region] ? options.region : 'eu';
     this.log = options.logger;
+    this.requestTimeoutMs = options.requestTimeoutMs ?? 5000;
 
     this.http = axios.create({
       baseURL: REGION_URLS[this.region] ?? REGION_URLS.eu,
-      timeout: options.requestTimeoutMs ?? 15000,
+      timeout: this.requestTimeoutMs,
       responseType: 'text',
       transformResponse: [(data) => data],
     });
@@ -562,12 +565,22 @@ export class AuxCloudClient {
         throw new Error(`Failed to parse AUX Cloud response: ${payload}`);
       }
     } catch (error) {
-      if (attempt >= 3) {
+      const errCode = (error as { code?: string })?.code;
+      const isTimeout = errCode === 'ECONNABORTED';
+      const isNetwork = errCode === 'ENOTFOUND' || errCode === 'ECONNRESET';
+      const shouldRetry = isTimeout || isNetwork;
+
+      if (!shouldRetry || attempt >= 3) {
         throw error instanceof Error ? error : new Error(String(error));
       }
 
-      const waitMs = Math.min(2000 * attempt, 5000);
-      this.log?.warn('Retrying AUX request %s (attempt %d)', endpoint, attempt + 1);
+      const waitMs = Math.min(1000 * attempt, 4000);
+      this.log?.warn(
+        'Retrying AUX request %s (attempt %d) [%s]',
+        endpoint,
+        attempt + 1,
+        errCode,
+      );
       await new Promise((resolve) => setTimeout(resolve, waitMs));
       return this.request(options, attempt + 1);
     }

@@ -1,101 +1,117 @@
 {
-  "pluginAlias": "AuxCloudPlatform",
-  "pluginType": "platform",
-  "singular": true,
-  "schema": {
-    "title": "AUX Cloud Platform",
-    "type": "object",
-    "required": [
-      "name",
-      "username",
-      "password"
-    ],
-    "properties": {
-      "name": {
-        "title": "Name",
-        "type": "string",
-        "default": "Aux Cloud"
-      },
-      "username": {
-        "title": "AUX Cloud Username",
-        "type": "string",
-        "description": "Email address or phone number registered with AUX Cloud."
-      },
-      "password": {
-        "title": "AUX Cloud Password",
-        "type": "string"
-      },
-      "region": {
-        "title": "Region",
-        "type": "string",
-        "default": "eu",
-        "enum": [
-          "eu",
-          "usa",
-          "cn"
-        ],
-        "description": "Select the AUX Cloud region that matches your account."
-      },
-      "temperatureUnit": {
-        "title": "Temperature Unit",
-        "type": "string",
-        "default": "C",
-        "enum": [
-          "C",
-          "F"
-        ],
-        "description": "Select the unit used when displaying temperatures. Values are converted automatically when talking to AUX Cloud."
-      },
-      "temperatureStep": {
-        "title": "Target Temperature Step",
-        "type": "number",
-        "default": 0.5,
-        "enum": [
-          0.5,
-          1
-        ],
-        "description": "Choose the increment for setpoints. 0.5 replicates AC Freedom, 1 limits adjustments to whole degrees. Fahrenheit mode enforces 1°F."
-      },
-      "featureSwitches": {
-        "title": "Extra Feature Switches",
-        "type": "array",
-        "items": {
-          "type": "string",
-          "enum": [
-            "screenDisplay",
-            "mildewProof",
-            "clean",
-            "health",
-            "eco",
-            "sleep"
-          ]
-        },
-        "description": "Expose optional HomeKit switches for AUX features like screen display, mildew prevention, self-clean, health, eco, and sleep modes."
-      },
-      "pollInterval": {
-        "title": "Polling Interval (seconds)",
-        "description": "How frequently the plugin should request updated state from AUX Cloud (enter a value between 30 and 600 seconds).",
-        "type": "integer",
-        "default": 60
-      },
-      "includeDeviceIds": {
-        "title": "Included Device IDs",
-        "type": "array",
-        "description": "Optional list of AUX endpoint IDs to expose. Leave empty to include every discovered device.",
-        "items": {
-          "title": "Endpoint ID",
-          "type": "string"
-        }
-      },
-      "excludeDeviceIds": {
-        "title": "Excluded Device IDs",
-        "type": "array",
-        "description": "Optional list of AUX endpoint IDs to skip after discovery.",
-        "items": {
-          "title": "Endpoint ID",
-          "type": "string"
-        }
-      }
-    }
-  }
+   "pluginAlias": "AuxCloudPlatform",
+   "pluginType": "platform",
+   "singular": true,
+   "schema": {
+     "title": "AUX Cloud Platform",
+     "type": "object",
+     "required": [
+       "name",
+       "username",
+       "password"
+     ],
+     "properties": {
+       "name": {
+         "title": "Name",
+         "type": "string",
+         "default": "Aux Cloud"
+       },
+       "username": {
+         "title": "AUX Cloud Username",
+         "type": "string",
+         "description": "Email address or phone number registered with AUX Cloud."
+       },
+       "password": {
+         "title": "AUX Cloud Password",
+         "type": "string"
+       },
+       "region": {
+         "title": "Region",
+         "type": "string",
+         "default": "eu",
+         "enum": [
+           "eu",
+           "usa",
+           "cn"
+         ],
+         "description": "Select the AUX Cloud region that matches your account."
+       },
+       "temperatureUnit": {
+         "title": "Temperature Unit",
+         "type": "string",
+         "default": "C",
+         "enum": [
+           "C",
+           "F"
+         ],
+         "description": "Select the unit used when displaying temperatures. Values are converted automatically when talking to AUX Cloud."
+       },
+       "temperatureStep": {
+         "title": "Target Temperature Step",
+         "type": "number",
+         "default": 0.5,
+         "enum": [
+           0.5,
+           1
+         ],
+         "description": "Choose the increment for setpoints. 0.5 replicates AC Freedom, 1 limits adjustments to whole degrees. Fahrenheit mode enforces 1°F."
+       },
+       "featureSwitches": {
+         "title": "Extra Feature Switches",
+         "type": "array",
+         "items": {
+           "type": "string",
+           "enum": [
+             "screenDisplay",
+             "mildewProof",
+             "clean",
+             "health",
+             "eco",
+             "sleep"
+           ]
+         },
+         "description": "Expose optional HomeKit switches for AUX features like screen display, mildew prevention, self-clean, health, eco, and sleep modes."
+       },
+       "pollInterval": {
+         "title": "Polling Interval (seconds)",
+         "description": "How frequently the plugin should request updated state from AUX Cloud (enter a value between 30 and 600 seconds).",
+         "type": "integer",
+         "default": 60
+       },
+       "includeDeviceIds": {
+         "title": "Included Device IDs",
+         "type": "array",
+         "description": "Optional list of AUX endpoint IDs to expose. Leave empty to include every discovered device.",
+         "items": {
+           "title": "Endpoint ID",
+           "type": "string"
+         }
+       },
+       "excludeDeviceIds": {
+         "title": "Excluded Device IDs",
+         "type": "array",
+         "description": "Optional list of AUX endpoint IDs to skip after discovery.",
+         "items": {
+           "title": "Endpoint ID",
+           "type": "string"
+         }
+       },
+       "commandRetryCount": {
+         "title": "Cloud Retry Attempts",
+         "type": "integer",
+         "default": 2,
+         "minimum": 0,
+         "maximum": 5,
+         "description": "Number of retry attempts when cloud response is slow or unavailable. Higher values = more reliable but slower feedback. 0 means cloud-only with no retry."
+       },
+       "commandTimeoutMs": {
+         "title": "Cloud Command Timeout (ms)",
+         "type": "integer",
+         "default": 5000,
+         "minimum": 1000,
+         "maximum": 15000,
+         "description": "Timeout in milliseconds for each cloud command attempt. If the cloud doesn't respond within this time, the next retry is triggered."
+       }
+     }
+   }
 }
