@@ -166,10 +166,20 @@ jobs:
           echo "Dist-tag: $DIST_TAG"
           echo "dist_tag=$DIST_TAG" >> "$GITHUB_OUTPUT"
 
+      - name: Debug npm auth environment
+        run: |
+          echo "npm version: $(npm --version)"
+          echo "npmrc path: ${NPM_CONFIG_USERCONFIG:-$HOME/.npmrc}"
+          cat "${NPM_CONFIG_USERCONFIG:-$HOME/.npmrc}" 2>/dev/null | sed 's/_authToken=.*/(_authToken redacted)/' || echo "(no npmrc)"
+          echo "OIDC URL set: ${ACTIONS_ID_TOKEN_REQUEST_URL:+yes}"
+          echo "OIDC TOKEN set: ${ACTIONS_ID_TOKEN_REQUEST_TOKEN:+yes}"
+
       - name: Publish to npm
         env:
           NPM_TAG: ${{ steps.dist_tag.outputs.dist_tag }}
         run: |
+          # Remove empty/invalid _authToken to allow OIDC exchange
+          npm config delete //registry.npmjs.org/:_authToken 2>/dev/null || true
           npm publish --access public --provenance --tag "$NPM_TAG"
 
       - name: Commit and push metadata updates
