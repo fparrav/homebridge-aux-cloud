@@ -171,17 +171,21 @@ jobs:
         run: |
           set -euo pipefail
           # Request GitHub OIDC token scoped for npm trusted publisher
-          OIDC_RESP=$(curl -sSfL \
+          OIDC_RESP=$(curl -sSL \
             -H "Authorization: Bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" \
             "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=npm")
+          echo "OIDC response status check: value length=$(echo "$OIDC_RESP" | python3 -c "import sys,json; d=json.load(sys.stdin); print(len(d.get('value','')))")"
           OIDC_TOKEN=$(echo "$OIDC_RESP" | python3 -c "import sys,json; print(json.load(sys.stdin)['value'])")
 
-          # Exchange OIDC token for npm granular publish token
-          NPM_RESP=$(curl -sSfL -X POST \
+          # Exchange OIDC token for npm granular publish token — show raw response on failure
+          HTTP_CODE=$(curl -sSL -w "%{http_code}" -o /tmp/npm_oidc_resp.json -X POST \
             -H "Content-Type: application/json" \
             -d "{\"oidcToken\":\"${OIDC_TOKEN}\"}" \
             "https://registry.npmjs.org/-/npm/v1/oidc/token")
-          NPM_TOKEN=$(echo "$NPM_RESP" | python3 -c "import sys,json; print(json.load(sys.stdin)['token'])")
+          echo "npm OIDC exchange HTTP status: ${HTTP_CODE}"
+          cat /tmp/npm_oidc_resp.json
+
+          NPM_TOKEN=$(python3 -c "import json; print(json.load(open('/tmp/npm_oidc_resp.json'))['token'])")
 
           echo "::add-mask::${NPM_TOKEN}"
           echo "npm_token=${NPM_TOKEN}" >> "$GITHUB_OUTPUT"
