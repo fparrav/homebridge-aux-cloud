@@ -178,8 +178,9 @@ jobs:
         env:
           NPM_TAG: ${{ steps.dist_tag.outputs.dist_tag }}
         run: |
-          # Remove empty/invalid _authToken to allow OIDC exchange
-          npm config delete //registry.npmjs.org/:_authToken 2>/dev/null || true
+          # Unset setup-node injected vars so npm uses pure OIDC trusted publisher exchange
+          unset NPM_CONFIG_USERCONFIG
+          unset NODE_AUTH_TOKEN
           npm publish --access public --provenance --tag "$NPM_TAG"
 
       - name: Commit and push metadata updates
