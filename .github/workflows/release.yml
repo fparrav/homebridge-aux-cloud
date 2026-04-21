@@ -27,7 +27,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '24'
+          node-version: '20.19.0'
           cache: 'yarn'
 
       - name: Enable Corepack
@@ -164,6 +164,9 @@ jobs:
           echo "Target branch: $TARGET_BRANCH"
           echo "Dist-tag: $DIST_TAG"
           echo "dist_tag=$DIST_TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Upgrade npm for OIDC trusted publisher support
+        run: npm install -g npm@11
 
       - name: Publish to npm
         env:
