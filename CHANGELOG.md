@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.0.6-beta.1 - 2026-04-21
+
+feat: optimistic UI + configurable retry
+
 ## 0.0.5 - 2025-12-06
 
 - Add Homebridge verified badge and funding metadata/donation links for AUX Cloud so the plugin appears trusted alongside the new support info.
