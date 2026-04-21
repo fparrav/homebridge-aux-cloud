@@ -178,9 +178,20 @@ jobs:
         env:
           NPM_TAG: ${{ steps.dist_tag.outputs.dist_tag }}
         run: |
-          # Unset setup-node injected vars so npm uses pure OIDC trusted publisher exchange
+          set -euo pipefail
+          echo "=== before unset ==="
+          echo "NPM_CONFIG_USERCONFIG=${NPM_CONFIG_USERCONFIG:-<unset>}"
+          echo "NODE_AUTH_TOKEN=${NODE_AUTH_TOKEN:+SET}"
           unset NPM_CONFIG_USERCONFIG
           unset NODE_AUTH_TOKEN
+          echo "=== after unset ==="
+          echo "NPM_CONFIG_USERCONFIG=${NPM_CONFIG_USERCONFIG:-<unset>}"
+          echo "NODE_AUTH_TOKEN=${NODE_AUTH_TOKEN:-<unset>}"
+          echo "=== home npmrc ==="
+          cat ~/.npmrc 2>/dev/null || echo "(no ~/.npmrc)"
+          echo "=== npm whoami (unauthenticated expected) ==="
+          npm whoami 2>&1 || true
+          echo "=== publish ==="
           npm publish --access public --provenance --tag "$NPM_TAG"
 
       - name: Commit and push metadata updates
