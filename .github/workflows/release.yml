@@ -166,26 +166,31 @@ jobs:
           echo "Dist-tag: $DIST_TAG"
           echo "dist_tag=$DIST_TAG" >> "$GITHUB_OUTPUT"
 
-      - name: Debug npm auth environment
+      - name: Get npm token via OIDC exchange
+        id: get_npm_token
         run: |
-          echo "npm version: $(npm --version)"
-          echo "npmrc path: ${NPM_CONFIG_USERCONFIG:-$HOME/.npmrc}"
-          cat "${NPM_CONFIG_USERCONFIG:-$HOME/.npmrc}" 2>/dev/null | sed 's/_authToken=.*/(_authToken redacted)/' || echo "(no npmrc)"
-          echo "OIDC URL set: ${ACTIONS_ID_TOKEN_REQUEST_URL:+yes}"
-          echo "OIDC TOKEN set: ${ACTIONS_ID_TOKEN_REQUEST_TOKEN:+yes}"
+          set -euo pipefail
+          # Request GitHub OIDC token scoped for npm trusted publisher
+          OIDC_RESP=$(curl -sSfL \
+            -H "Authorization: Bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" \
+            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=npm")
+          OIDC_TOKEN=$(echo "$OIDC_RESP" | python3 -c "import sys,json; print(json.load(sys.stdin)['value'])")
+
+          # Exchange OIDC token for npm granular publish token
+          NPM_RESP=$(curl -sSfL -X POST \
+            -H "Content-Type: application/json" \
+            -d "{\"oidcToken\":\"${OIDC_TOKEN}\"}" \
+            "https://registry.npmjs.org/-/npm/v1/oidc/token")
+          NPM_TOKEN=$(echo "$NPM_RESP" | python3 -c "import sys,json; print(json.load(sys.stdin)['token'])")
+
+          echo "::add-mask::${NPM_TOKEN}"
+          echo "npm_token=${NPM_TOKEN}" >> "$GITHUB_OUTPUT"
 
       - name: Publish to npm
         env:
           NPM_TAG: ${{ steps.dist_tag.outputs.dist_tag }}
-        run: |
-          set -euo pipefail
-          # Keep NPM_CONFIG_USERCONFIG (npmrc with _authToken=${NODE_AUTH_TOKEN}) but
-          # unset NODE_AUTH_TOKEN so the token resolves to empty → triggers npm OIDC exchange
-          unset NODE_AUTH_TOKEN
-          echo "npmrc content:"
-          cat "${NPM_CONFIG_USERCONFIG}" 2>/dev/null | sed 's/_authToken=.*/(_authToken=<empty>)/' || echo "(no npmrc)"
-          echo "npm config //registry.npmjs.org/:_authToken = $(npm config get //registry.npmjs.org/:_authToken 2>/dev/null || echo '<none>')"
-          npm publish --access public --provenance --tag "$NPM_TAG"
+          NODE_AUTH_TOKEN: ${{ steps.get_npm_token.outputs.npm_token }}
+        run: npm publish --access public --provenance --tag "$NPM_TAG"
 
       - name: Commit and push metadata updates
         env:
