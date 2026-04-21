@@ -136,30 +136,36 @@ jobs:
         id: dist_tag
         run: |
           set -euo pipefail
+          RELEASE_TAG="${{ github.event.release.tag_name }}"
           TARGET_BRANCH="${{ github.event.release.target_commitish }}"
           if [ -z "$TARGET_BRANCH" ]; then
             echo "Unable to detect target branch for release." >&2
             exit 1
           fi
 
-          LOWER_BRANCH=$(echo "$TARGET_BRANCH" | tr '[:upper:]' '[:lower:]')
-
-          case "$LOWER_BRANCH" in
-            main|master)
-              DIST_TAG="latest"
-              ;;
-            beta|beta/*)
-              DIST_TAG="beta"
-              ;;
-            *)
-              if [[ "$LOWER_BRANCH" =~ ^[0-9a-f]{40}$ ]]; then
-                DIST_TAG="next"
-              else
-                SANITIZED=$(echo "$LOWER_BRANCH" | tr '/ ' '-')
-                DIST_TAG="${SANITIZED}"
-              fi
-              ;;
-          esac
+          # Pre-release versions (e.g. 0.0.6-beta.1, 1.0.0-alpha.2) always get beta dist-tag
+          VERSION="${RELEASE_TAG#v}"
+          if [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+-.+ ]]; then
+            DIST_TAG="beta"
+          else
+            LOWER_BRANCH=$(echo "$TARGET_BRANCH" | tr '[:upper:]' '[:lower:]')
+            case "$LOWER_BRANCH" in
+              main|master)
+                DIST_TAG="latest"
+                ;;
+              beta|beta/*)
+                DIST_TAG="beta"
+                ;;
+              *)
+                if [[ "$LOWER_BRANCH" =~ ^[0-9a-f]{40}$ ]]; then
+                  DIST_TAG="next"
+                else
+                  SANITIZED=$(echo "$LOWER_BRANCH" | tr '/ ' '-')
+                  DIST_TAG="${SANITIZED}"
+                fi
+                ;;
+            esac
+          fi
 
           echo "Target branch: $TARGET_BRANCH"
           echo "Dist-tag: $DIST_TAG"
