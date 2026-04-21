@@ -29,6 +29,7 @@ jobs:
         with:
           node-version: '20.19.0'
           cache: 'yarn'
+          registry-url: 'https://registry.npmjs.org'
 
       - name: Enable Corepack
         run: corepack enable
@@ -167,6 +168,7 @@ jobs:
 
       - name: Publish to npm
         env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_TAG: ${{ steps.dist_tag.outputs.dist_tag }}
         run: |
           npm publish --access public --provenance --tag "$NPM_TAG"
