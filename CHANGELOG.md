@@ -4,6 +4,8 @@
 
 feat: optimistic UI + configurable retry
 
+**Note:** This plugin currently supports **cloud-only control**. All commands are sent through the AUX Cloud API. There is no local LAN control option — this is planned for a future release.
+
 ## 0.0.5 - 2025-12-06
 
 - Add Homebridge verified badge and funding metadata/donation links for AUX Cloud so the plugin appears trusted alongside the new support info.

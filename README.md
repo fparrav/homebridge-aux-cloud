@@ -72,6 +72,8 @@ The configuration schema (`config.schema.json`) surfaces the same options inside
 
 > ⚠️ **Considerations**
 >
+> - **Cloud-only control**: All commands are routed through the AUX Cloud API. There is no local LAN control option — every device uses cloud control regardless of your network topology. Local LAN control (for AC Freedom / Broadlink-based devices) is planned for a future release.
+> - Because all commands go to the cloud, response times depend on your internet connection and AUX Cloud server availability. The plugin applies optimistic updates so HomeKit reflects changes instantly, but the physical device follows after cloud confirmation.
 > - Only accounts on the public AUX Cloud deployment are supported. Regional/private deployments might use different hosts.
 > - The current release focuses on generic AUX AC units. Heat-pump specific services and extra switches (eco, mildew proof, display, etc.) are on the roadmap.
 > - The AUX Cloud service can occasionally throttle requests. Keep the poll interval ≥60 s if you have many devices.

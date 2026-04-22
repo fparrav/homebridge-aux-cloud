@@ -489,6 +489,20 @@ export class AuxCloudPlatformAccessory {
     // Si el AC está apagado, encenderlo primero
     const shouldPowerOn = !this.isDevicePowered();
     if (shouldPowerOn) {
+      // Aplicar estado de power optimista (el caller puede no haber llamado handleActiveSet)
+      this.device.params[AC_POWER] = 1;
+      this.device.state = 1;
+      this.platform.updateCachedDevice(this.device);
+
+      // Registrar pending guard para que el poll no sobreescriba el estado
+      const seq = this.platform.registerPendingCommandWithState(this.device.endpointId, 1);
+      if (seq !== null) {
+        const endpointId = this.device.endpointId;
+        setTimeout(() => {
+          this.platform.completePendingCommand(endpointId);
+        }, 4000);
+      }
+
       this.platform.startDeviceCommand(this.device, AC_POWER_ON);
       await delay(400);
     }
