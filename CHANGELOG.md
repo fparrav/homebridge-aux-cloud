@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.0.6-beta.2 - 2026-04-22
+
+## What's Changed
+
+- fix: `handleTargetStateSet` now correctly applies optimistic power state (`AC_POWER=1`) and registers a 4 s pending-command guard when it needs to power the device on before changing mode. Previously these were missing, which could allow a poll to overwrite the optimistic state before the cloud confirmed the command — leading in some cases to the device physically turning off after a subsequent temperature command.
+
+## Notes
+
+> **Cloud-only control**: This plugin routes all commands through the AUX Cloud API. There is no local LAN control option — every device uses cloud control regardless of network topology. Local LAN control is planned for a future release.
+
 ## v0.0.6-beta.1 - 2026-04-21
 
 feat: optimistic UI + configurable retry
