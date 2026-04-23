@@ -1,5 +1,16 @@
 # Changelog
 
+## v0.0.6 - 2026-04-23
+
+## v0.0.6 - 2026-04-23
+
+Fixes:
+- **Fix optimistic UI for power state**: handleTargetStateSet ahora envía el estado optimista correctamente antes de confirmar con la API cloud
+- **Fix pending guard**: Se agregó guard para evitar comandos concurrentes que podían desincronizar el estado del dispositivo
+
+Internal:
+- ci: detect pre-release version tag to use beta dist-tag instead of latest
+
 ## v0.0.6-beta.2 - 2026-04-22
 
 ## What's Changed
