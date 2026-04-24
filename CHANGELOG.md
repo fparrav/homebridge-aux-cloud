@@ -1,5 +1,20 @@
 # Changelog
 
+## v0.0.7-beta.1 - 2026-04-24
+
+feat: local LAN control with cloud fallback
+
+- Add local-first/cloud-only control strategy for Broadlink-based AUX devices (AC Freedom, etc.)
+- Implement Broadlink LAN protocol (UDP) with AES-128-CBC encryption
+- Add dgram-as-promised dependency for UDP socket management
+- Auto-discover Broadlink devices on LAN via UDP broadcast at startup
+- Per-device controlStrategy override (force local or cloud per device)
+- Local polling for devices with known IP/MAC in refresh loop
+- Cloud fallback after 3 consecutive LAN failures
+- Update README with LAN control config docs and acknowledgements
+
+Note: Local LAN control requires devices running older Broadlink-based firmware. Newer firmware may use a different protocol.
+
 ## v0.0.6 - 2026-04-23
 
 ## v0.0.6 - 2026-04-23
