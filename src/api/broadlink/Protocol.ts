@@ -70,12 +70,12 @@ const HEADER_MAGIC = Buffer.from([
 ]);
 
 /**
- * Calculate 16-bit checksum (sum all bytes, wrap around, XOR with 0xffff).
+ * Calculate 16-bit checksum (big-endian word sum, wrap around, XOR with 0xffff).
  */
 export function calculateChecksum(data: Buffer): number {
   let sum = 0;
-  for (let i = 0; i < data.length; i++) {
-    sum = (sum + data[i]) & 0xffff;
+  for (let i = 0; i < data.length; i += 2) {
+    sum = (sum + ((data[i] << 8) + data[i + 1])) & 0xffff;
   }
   while (sum >> 16) {
     sum = ((sum & 0xffff) + (sum >> 16)) & 0xffff;
@@ -164,7 +164,7 @@ export function buildPacket(
 
   // Inner checksum of plaintext payload (stored before encryption, at 0x34-0x35)
   let innerChk = 0xbeaf;
-  for (let i = 0; i < payload.length; i++) {
+  for (let i = 0; i < payload.length; i += 2) {
     innerChk = (innerChk + payload[i]) & 0xffff;
   }
   header[0x34] = innerChk & 0xff;
@@ -178,7 +178,7 @@ export function buildPacket(
 
   // Outer checksum over the entire packet
   let outerChk = 0xbeaf;
-  for (let i = 0; i < packet.length; i++) {
+  for (let i = 0; i < packet.length; i += 2) {
     outerChk = (outerChk + packet[i]) & 0xffff;
   }
   packet[0x20] = outerChk & 0xff;

@@ -1,3 +1,12 @@
+## v0.0.7-beta.13 - 2026-04-24
+
+fix: correct Broadlink LAN checksum — big-endian word sum instead of byte sum
+
+- Root cause: `calculateChecksum` was summing bytes individually (`sum + data[i]`) instead of 16-bit big-endian words (`sum + ((data[i] << 8) + data[i+1])`)
+- This produced invalid checksums (e.g. 0xfc47 vs 0x66de in reference) causing the device to silently discard all command packets
+- Fix matches the `broadlink-aircon-api` reference implementation exactly
+- Auth and state polling use separate payloads unaffected by this bug
+
 ## v0.0.7-beta.12 - 2026-04-24
 
 fix: correct command payload byte 12 — device was silently discarding all LAN commands
