@@ -1,3 +1,9 @@
+# Changelog
+
+## v0.0.7-beta.13 — Fix checksum Broadlink (big-endian word sum) - 2026-04-24
+
+**Full Changelog**: https://github.com/fparrav/homebridge-aux-cloud/compare/v0.0.7-beta.12...v0.0.7-beta.13
+
 ## v0.0.7-beta.13 - 2026-04-24
 
 fix: correct Broadlink LAN checksum — big-endian word sum instead of byte sum
