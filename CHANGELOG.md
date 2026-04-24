@@ -1,5 +1,16 @@
 # Changelog
 
+## v0.0.7-beta.6 - 2026-04-24
+
+fix: fix LAN two-step auth, double-wrap bug, and cloud device caching
+
+- Fix `pollLocalState`: register UDP listeners before sending packets to fix race condition
+- Fix `pollLocalState`: implement two-step auth flow (wait for 0xe9 before sending state query)
+- Fix `sendLocalCommand`: use `Protocol.buildCommandPayload` directly to eliminate double-wrapping bug
+- Fix `sendLocalCommand`: implement two-step auth flow for commands as well
+- Cache last known cloud devices so they don't disappear as "stale" when cloud is unreachable
+- Extract `buildAuthPayload()` helper to eliminate code duplication between poll and command paths
+
 ## v0.0.7-beta.5 - 2026-04-24
 
 fix: cloud failure no longer blocks LAN-only devices
