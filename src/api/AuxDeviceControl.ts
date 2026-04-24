@@ -176,13 +176,9 @@ export class AuxDeviceControl {
     });
   }
 
-  private sendPacket(socket: ReturnType<typeof createSocket>, pkt: Buffer, ip: string): void {
-    socket.send(pkt, 0, pkt.length, 80, ip);
-  }
-
   private async getOrCreateSession(ip: string, mac: string): Promise<LanSession> {
     const key = mac.toLowerCase();
-    let session = this.lanSessions.get(key);
+    const session = this.lanSessions.get(key);
     if (session && session.authenticated) return session;
     if (session) {
       try { session.socket.close(); } catch { /* ignore */ }
