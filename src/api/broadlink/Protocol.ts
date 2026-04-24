@@ -227,8 +227,10 @@ export function buildCommandPayload(
   payload[10] = (temperature << 3) | (verticalFixation & 0x07);
   // Byte 11: horizontalFixation (bits 5-7)
   payload[11] = (horizontalFixation & 0x07) << 5;
-  // Byte 12: half-degree flag (bit 7)
-  payload[12] = hasHalfDegree ? 0x80 : 0x00;
+  // Byte 12: required marker 0x0F (bits 0-3) | half-degree flag (bit 7)
+  // Reference: payload[12] = 0b00001111 | temperature_05 << 7
+  // Without 0x0F the device silently discards the command.
+  payload[12] = 0x0f | (hasHalfDegree ? 0x80 : 0x00);
   // Byte 13: fanspeed (bits 5-7)
   payload[13] = (fanspeed & 0x07) << 5;
   // Byte 14: turbo (bit 6) | mute (bit 7)

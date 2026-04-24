@@ -1,3 +1,12 @@
+## v0.0.7-beta.12 - 2026-04-24
+
+fix: correct command payload byte 12 — device was silently discarding all LAN commands
+
+- Root cause: `payload[12]` was missing required marker `0x0F` (bits 0-3) present in the reference broadlink-aircon-api implementation
+- Without `0x0F` the device validates and discards the command packet without responding or acting on it
+- Fix: `payload[12] = 0x0f | (hasHalfDegree ? 0x80 : 0x00)` — matches reference exactly
+- Auth and state polling were unaffected because they use separate fixed magic payloads
+
 ## v0.0.7-beta.11 - 2026-04-24
 
 fix: LAN commands carry full device state to prevent unintended power-off
