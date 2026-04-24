@@ -325,7 +325,22 @@ private getLanOnlyDevices(): AuxDevice[] {
           devicetypeFlag: 0,
           cookie: '',
           mac: normalizedMac,
-          params: {},
+          // Default params so fan/switch accessories appear before first LAN poll
+          params: {
+            pwr: 0,
+            temp: 240,    // 24°C ×10
+            ac_mode: 4,   // AUTO
+            ac_mark: 0,   // AUTO fan speed
+            ac_vdir: 0,
+            ac_hdir: 0,
+            ac_slp: 0,
+            scrdisp: 0,
+            mldprf: 0,
+            ac_health: 0,
+            ac_clean: 0,
+            mute: 0,
+            turbo: 0,
+          },
           state: 0,
         }
       );

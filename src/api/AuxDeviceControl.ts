@@ -297,7 +297,9 @@ export class AuxDeviceControl {
       */
   private buildCommandPayload(params: Record<string, number>): Buffer {
     const power = params['pwr'] ?? 0;
-    const temp = params['temp'] ?? 24;
+    // params['temp'] is stored ×10 (e.g. 240 = 24°C); LAN protocol expects raw degrees
+    const rawTemp = params['temp'] ?? 240;
+    const temp = rawTemp > 100 ? rawTemp / 10 : rawTemp;
     const mode = params['ac_mode'] ?? 0;
     const fanspeed = params['ac_mark'] ?? 0;
     const verticalFixation = params['ac_vdir'] ?? 0;
@@ -389,12 +391,12 @@ export class AuxDeviceControl {
       const statePacket = this.buildPacket(statePayload, 0x6a, macBuf);
       await socket.send(statePacket, 0, statePacket.length, 80, ip);
 
-        // Listen for response
+        // Listen for response (raw packet = 0x38 header + encrypted payload, min 88 bytes for state)
       const response = await new Promise<Buffer | null>((resolve) => {
         const timeoutId = setTimeout(() => resolve(null), 3000);
         socket.socket.on('message', (msg) => {
           const command = msg[0x26];
-          if (command === 0xee && msg.length === 48) {
+          if (command === 0xee && msg.length >= 0x38 + 16) {
             clearTimeout(timeoutId);
             resolve(msg);
             }
@@ -405,21 +407,25 @@ export class AuxDeviceControl {
         return null;
         }
 
-        // Parse state from response
+        // Decrypt payload (AES-128-CBC with default Broadlink key/IV)
+      const { decryptPayload } = await import('./broadlink/Protocol');
+      const decrypted = decryptPayload(response);
+
+        // Parse state from decrypted payload (same offsets as Protocol.ts parseStatePayload)
       const params: Record<string, number> = {};
-      params['pwr'] = (response[20] >> 5) & 0x01;
-      params['temp'] = 8 + (response[12] >> 3);
-      params['ac_vdir'] = response[12] & 0x07;
-      params['ac_mode'] = (response[17] >> 5) & 0x0f;
-      params['ac_slp'] = (response[17] >> 2) & 0x01;
-      params['scrdisp'] = (response[22] >> 4) & 0x01;
-      params['mldprf'] = (response[22] >> 3) & 0x01;
-      params['ac_health'] = (response[20] >> 1) & 0x01;
-      params['ac_hdir'] = (response[12] & 0x07) << 0;
-      params['ac_mark'] = (response[15] >> 5) & 0x07;
-      params['mute'] = (response[16] >> 7) & 0x01;
-      params['turbo'] = (response[16] >> 6) & 0x01;
-      params['ac_clean'] = (response[20] >> 2) & 0x01;
+      params['pwr'] = (decrypted[20] >> 5) & 0x01;
+      params['temp'] = (8 + (decrypted[12] >> 3)) * 10;  // ×10 to match AUX Cloud format
+      params['ac_vdir'] = decrypted[12] & 0x07;
+      params['ac_mode'] = (decrypted[17] >> 5) & 0x0f;
+      params['ac_slp'] = (decrypted[17] >> 2) & 0x01;
+      params['scrdisp'] = (decrypted[22] >> 4) & 0x01;
+      params['mldprf'] = (decrypted[22] >> 3) & 0x01;
+      params['ac_health'] = (decrypted[20] >> 1) & 0x01;
+      params['ac_hdir'] = decrypted[12] & 0x07;
+      params['ac_mark'] = (decrypted[15] >> 5) & 0x07;
+      params['mute'] = (decrypted[16] >> 7) & 0x01;
+      params['turbo'] = (decrypted[16] >> 6) & 0x01;
+      params['ac_clean'] = (decrypted[20] >> 2) & 0x01;
       return params;
       }
     catch {

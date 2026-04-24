@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.0.7-beta.4 - 2026-04-24
+
+fix: LAN state polling and feature accessories for LAN-only devices
+
+- Fix `pollLocalState`: response length check was `=== 48` but real Broadlink response is 88 bytes (0x38 header + 32-byte encrypted payload) — state was never read
+- Fix `pollLocalState`: decrypt response with AES-128-CBC before parsing state bytes
+- Fix `pollLocalState`: multiply temperature by ×10 to match AUX Cloud param format used by the rest of the plugin
+- Fix `buildCommandPayload`: convert temp from ×10 format back to raw degrees before encoding for LAN protocol
+- Initialize LAN-only devices with default params (fan speed, mode, switches at 0) so all accessories (fan slider, Auto Fan, Health, Clean, Sleep, Screen Display, Mildew Proof) appear in HomeKit immediately before first LAN poll
+
 ## v0.0.7-beta.3 - 2026-04-24
 
 fix: LAN discovery no longer fatal when static IPs are configured

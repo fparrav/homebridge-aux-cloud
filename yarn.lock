@@ -1309,6 +1309,11 @@ delayed-stream@~1.0.0:
   resolved "https://registry.yarnpkg.com/delayed-stream/-/delayed-stream-1.0.0.tgz#df3ae199acadfb7d440aaae0b29e2272b24ec619"
   integrity sha512-ZySD7Nf91aLB0RxL4KGrKHBXl7Eds1DAmEdcoVawXnLD7SDhpNgtuII2aAkg7a7QS41jxPSZ17p4VdGnMHk3MQ==
 
+dgram-as-promised@^6.0.0:
+  version "6.0.0"
+  resolved "https://registry.yarnpkg.com/dgram-as-promised/-/dgram-as-promised-6.0.0.tgz#d3cd7ee6f64af547edf0680a9aa65eae0758afcb"
+  integrity sha512-W/xRX4eh1eo1jFmgeYnnZLFTlcV7I3JrMcljsp1BknhQ79MRaX6rYzxVDDSZbwybkWO6+sdqKadOFtl7nwlUbA==
+
 diff@^5.1.0:
   version "5.2.0"
   resolved "https://registry.yarnpkg.com/diff/-/diff-5.2.0.tgz#26ded047cd1179b78b9537d5ef725503ce1ae531"
