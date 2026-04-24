@@ -335,18 +335,24 @@ private getLanOnlyDevices(): AuxDevice[] {
   private async initialize(): Promise<void> {
     if (this.config.localControlEnabled) {
       const { DeviceDiscovery } = await import('./api/broadlink/DeviceDiscovery');
-      let discovered: Awaited<ReturnType<typeof DeviceDiscovery.discover>>;
+      const devicesWithStaticIp = (this.config.devices ?? []).filter((d) => d.ip && d.mac);
       try {
-        discovered = await DeviceDiscovery.discover(3000);
+        const discovered = await DeviceDiscovery.discover(3000);
+        if (discovered.length === 0 && devicesWithStaticIp.length === 0) {
+          throw new Error('LAN discovery found no Broadlink devices and no static IP/MAC configured. Check your network or disable localControlEnabled.');
+        }
+        for (const dev of discovered) {
+          this.deviceControl.registerDiscoveredDevice(dev);
+          this.log.info('Discovered Broadlink device: %s (MAC: %s)', dev.ip, dev.mac);
+        }
+        if (discovered.length === 0) {
+          this.log.warn('[Aux Cloud] LAN discovery found no devices via broadcast. Using static IP/MAC from config.');
+        }
       } catch (error) {
-        throw new Error(`LAN discovery failed: ${error}. Disable localControlEnabled or fix network connectivity.`);
-      }
-      if (discovered.length === 0) {
-        throw new Error('LAN discovery found no Broadlink devices. Check your network or disable localControlEnabled.');
-      }
-      for (const dev of discovered) {
-        this.deviceControl.registerDiscoveredDevice(dev);
-        this.log.info('Discovered Broadlink device: %s (MAC: %s)', dev.ip, dev.mac);
+        if (devicesWithStaticIp.length === 0) {
+          throw error;
+        }
+        this.log.warn('[Aux Cloud] LAN discovery broadcast failed (%s). Using static IP/MAC from config.', error);
       }
     }
 

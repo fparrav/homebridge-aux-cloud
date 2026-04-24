@@ -1,5 +1,14 @@
 # Changelog
 
+## v0.0.7-beta.3 - 2026-04-24
+
+fix: LAN discovery no longer fatal when static IPs are configured
+
+- If UDP broadcast discovery finds 0 devices but devices have static `ip` configured, log a warning and continue (don't throw)
+- Fatal error only when both discovery fails AND no static IP/MAC fallback is configured
+- Fixes startup failure in Docker environments where broadcast UDP is blocked by the network bridge
+- Add `ip` field to LAN-only device entries (recommended for Docker/VLAN setups)
+
 ## v0.0.7-beta.2 - 2026-04-24
 
 feat: LAN-only devices (mac + name, no endpointId), MAC-based mapping, mandatory discovery
