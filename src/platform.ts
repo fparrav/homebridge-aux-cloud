@@ -103,6 +103,9 @@ export class AuxCloudPlatform implements DynamicPlatformPlugin {
 
   private isSyncing = false;
 
+  // Cache last known cloud devices for resilience when cloud is unreachable
+  private lastKnownCloudDevices: AuxDevice[] = [];
+
   private refreshDebounce?: NodeJS.Timeout;
 
   constructor(
@@ -406,10 +409,15 @@ private getLanOnlyDevices(): AuxDevice[] {
           includeIds: this.includeIds,
           excludeIds: this.excludeIds,
         });
+        this.lastKnownCloudDevices = cloudDevices; // update cache
         this.log.debug('Fetched %d AUX Cloud devices', cloudDevices.length);
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        this.log.error('Failed to fetch AUX Cloud devices: %s', message);
+        this.log.warn('Failed to fetch AUX Cloud devices: %s', message);
+          // If cloud fails, use cached devices so cloud devices don't disappear as stale
+        cloudDevices = this.lastKnownCloudDevices.length > 0
+             ? this.lastKnownCloudDevices
+             : cloudDevices; // empty (first run with no cloud)
         this.client.invalidateSession();
       }
 
