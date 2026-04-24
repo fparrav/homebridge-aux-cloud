@@ -394,18 +394,24 @@ private getLanOnlyDevices(): AuxDevice[] {
   private async refreshDevices(): Promise<void> {
     if (this.isSyncing) {
       return;
-       }
+    }
     this.isSyncing = true;
 
     try {
-      await this.client.ensureLoggedIn(this.config.username!, this.config.password!);
+      let cloudDevices: AuxDevice[] = [];
 
-      const cloudDevices = await this.client.listDevices({
-        includeIds: this.includeIds,
-        excludeIds: this.excludeIds,
-      });
-
-      this.log.debug('Fetched %d AUX Cloud devices', cloudDevices.length);
+      try {
+        await this.client.ensureLoggedIn(this.config.username!, this.config.password!);
+        cloudDevices = await this.client.listDevices({
+          includeIds: this.includeIds,
+          excludeIds: this.excludeIds,
+        });
+        this.log.debug('Fetched %d AUX Cloud devices', cloudDevices.length);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        this.log.error('Failed to fetch AUX Cloud devices: %s', message);
+        this.client.invalidateSession();
+      }
 
       const lanOnlyDevices = this.getLanOnlyDevices();
       const allDevices = [...cloudDevices, ...lanOnlyDevices];
@@ -430,15 +436,13 @@ private getLanOnlyDevices(): AuxDevice[] {
         }
       }
 
-      this.reconcileAccessories(allDevices);
-       } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      this.log.error('Failed to refresh AUX Cloud devices: %s', message);
-      this.client.invalidateSession();
-       } finally {
-      this.isSyncing = false;
-       }
+      if (allDevices.length > 0) {
+        this.reconcileAccessories(allDevices);
       }
+    } finally {
+      this.isSyncing = false;
+    }
+  }
 
   private reconcileAccessories(devices: AuxDevice[]): void {
     const seen = new Set<string>();

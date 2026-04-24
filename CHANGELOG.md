@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.0.7-beta.5 - 2026-04-24
+
+fix: cloud failure no longer blocks LAN-only devices
+
+- Separate cloud fetch from LAN polling in `refreshDevices` — if AUX Cloud login/fetch fails, LAN-only devices are still polled and reconciled independently
+- LAN-only devices now update state and appear in HomeKit even when cloud is unreachable
+
 ## v0.0.7-beta.4 - 2026-04-24
 
 fix: LAN state polling and feature accessories for LAN-only devices
