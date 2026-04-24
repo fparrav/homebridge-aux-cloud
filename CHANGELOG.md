@@ -1,3 +1,10 @@
+## v0.0.7-beta.10 - 2026-04-24
+
+fix: visible LAN diagnostic logs and LAN-only device state
+
+- Change critical LAN logs from `debug` to `warn`/`info` so they appear in production without debug mode
+- Fix `getLanOnlyDevices`: devices now initialized with `state: 1` so they don't appear "No Response" in HomeKit
+- Logs now surface: auth OK/timeout/fail, state poll OK/timeout, command sent, and local poll results
 # Changelog
 
 ## v0.0.7-beta.9 - 2026-04-24

@@ -239,8 +239,11 @@ export class AuxDeviceControl {
       session.socket.send(authPacket, 0, authPacket.length, 80, ip);
     });
 
-    if (authMsg === null) throw new Error(`LAN auth timeout for ${ip}`);
-    this.logger?.debug('[LAN] Auth OK for %s', ip);
+      if (authMsg === null) {
+      this.logger?.warn('[LAN] Auth timeout for %s — no response in 5s', ip);
+      throw new Error(`LAN auth timeout for ${ip}`);
+    }
+    this.logger?.warn('[LAN] Auth OK for %s', ip);
 
     const auth = parseAuthResponse(authMsg);
     if (auth) {
@@ -268,6 +271,7 @@ export class AuxDeviceControl {
     const commandPayload = buildCommandPayload(normalizedParams);
     const cmdPacket = buildPacket(commandPayload, BroadlinkCommand.Packet, macBuf, session.id, session.count++, session.key);
     session.socket.send(cmdPacket, 0, cmdPacket.length, 80, ip);
+    this.logger?.warn('[LAN] Sending command to %s: %j', ip, normalizedParams);
     // fire-and-forget, no response expected
   }
 
@@ -353,7 +357,7 @@ export class AuxDeviceControl {
     try {
       session = await this.getOrCreateSession(ip, mac);
     } catch {
-      this.logger?.debug('[LAN] Auth failed for %s', ip);
+      this.logger?.warn('[LAN] Auth failed for %s — skipping poll', ip);
       return null;
     }
 
@@ -367,18 +371,19 @@ export class AuxDeviceControl {
     });
 
     if (stateResponse === null) {
+      this.logger?.warn('[LAN] State poll timeout for %s', ip);
       session.authenticated = false;
       return null;
     }
 
     const decrypted = decryptPayload(stateResponse, session.key);
-    this.logger?.debug('[LAN] Decrypted state (%d bytes): %s', decrypted.length, decrypted.toString('hex'));
 
     const params = this.parseDecryptedState(decrypted);
     if (params === null) {
       this.logger?.debug('[LAN] Decrypted payload too short (%d bytes) for %s', decrypted.length, ip);
       return null;
     }
+    this.logger?.warn('[LAN] State OK for %s (%d bytes): pwr=%d temp=%d', ip, decrypted.length, params.pwr, params.temp);
     return params;
   }
 }

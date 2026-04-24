@@ -345,7 +345,8 @@ private getLanOnlyDevices(): AuxDevice[] {
             mute: 0,
             turbo: 0,
           },
-          state: 0,
+          state: 1,
+           // LAN-only: siempre considerado online; poll actualiza params, no conectividad
         }
       );
     });
@@ -436,11 +437,11 @@ private getLanOnlyDevices(): AuxDevice[] {
             if (localParams != null) {
               device.params = { ...device.params, ...localParams };
               device.state = 1;
-              this.log.debug('Local poll OK for %s', device.endpointId);
+              this.log.info('[LAN] Poll OK for %s', device.endpointId)
             }
           } catch {
             this.deviceControl.recordFailure(device.endpointId);
-            this.log.debug('Local poll failed for %s', device.endpointId);
+            this.log.warn('[LAN] Poll failed for %s', device.endpointId)
           }
         }
       }

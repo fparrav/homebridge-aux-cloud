@@ -1,69 +1,69 @@
 {
-  "name": "homebridge-aux-cloud",
-  "version": "0.0.7-beta.9",
-  "description": "Homebridge plugin for AUX Cloud appliances (ported from maeek/ha-aux-cloud).",
-  "license": "MIT",
-  "keywords": [
-    "homebridge-plugin",
-    "homebridge-platform",
-    "aux",
-    "aux-cloud",
-    "air-conditioner",
-    "hvac",
-    "homekit",
-    "smart-home"
-  ],
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/fparrav/homebridge-aux-cloud.git"
-  },
-  "bugs": {
-    "url": "https://github.com/fparrav/homebridge-aux-cloud/issues"
-  },
-  "homepage": "https://github.com/fparrav/homebridge-aux-cloud#readme",
-  "engines": {
-    "homebridge": ">=1.7.0",
-    "node": ">=20.0.0"
-  },
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
-  "files": [
-    "dist/**/*",
-    "config.schema.json"
-  ],
-  "scripts": {
-    "build": "rimraf ./dist && tsc -p tsconfig.build.json",
-    "lint": "eslint ./src --ext .ts",
-    "lint:fix": "eslint ./src --ext .ts --fix",
-    "watch": "tsc -p tsconfig.build.json --watch",
-    "prepare": "npm run build",
-    "prepublishOnly": "npm run lint && npm run build",
-    "test": "echo \"No automated tests yet\""
-  },
-  "dependencies": {
-    "axios": "^1.7.7",
-    "dgram-as-promised": "^6.0.0"
-  },
-  "devDependencies": {
-    "@semantic-release/changelog": "6.0.3",
-    "@semantic-release/commit-analyzer": "13.0.1",
-    "@semantic-release/git": "10.0.1",
-    "@semantic-release/github": "11.0.6",
-    "@semantic-release/npm": "12.0.2",
-    "@semantic-release/release-notes-generator": "14.1.0",
-    "@types/node": "^20.14.2",
-    "@typescript-eslint/eslint-plugin": "^6.21.0",
-    "@typescript-eslint/parser": "^6.21.0",
-    "eslint": "^8.57.0",
-    "homebridge": "^1.7.0",
-    "rimraf": "^5.0.5",
-    "semantic-release": "24.2.9",
-    "typescript": "~5.3.3"
-  },
-  "packageManager": "yarn@1.22.22+sha512.a6b2f7906b721bba3d67d4aff083df04dad64c399707841b7acf00f6b133b7ac24255f2652fa22ae3534329dc6180534e98d17432037ff6fd140556e2bb3137e",
-  "donationUrl": "https://paypal.me/feparrav",
-  "funding": {
-    "type": "paypal",
-    "url": "https://paypal.me/feparrav"
-  }
+   "name": "homebridge-aux-cloud",
+   "version": "0.0.7-beta.10",
+   "description": "Homebridge plugin for AUX Cloud appliances (ported from maeek/ha-aux-cloud).",
+   "license": "MIT",
+   "keywords": [
+      "homebridge-plugin",
+      "homebridge-platform",
+      "aux",
+      "aux-cloud",
+      "air-conditioner",
+      "hvac",
+      "homekit",
+      "smart-home"
+   ],
+   "repository": {
+      "type": "git",
+      "url": "https://github.com/fparrav/homebridge-aux-cloud.git"
+   },
+   "bugs": {
+      "url": "https://github.com/fparrav/homebridge-aux-cloud/issues"
+   },
+   "homepage": "https://github.com/fparrav/homebridge-aux-cloud#readme",
+   "engines": {
+      "homebridge": ">=1.7.0",
+      "node": ">=20.0.0"
+   },
+   "main": "dist/index.js",
+   "types": "dist/index.d.ts",
+   "files": [
+      "dist/**/*",
+      "config.schema.json"
+   ],
+   "scripts": {
+      "build": "rimraf ./dist && tsc -p tsconfig.build.json",
+      "lint": "eslint ./src --ext .ts",
+      "lint:fix": "eslint ./src --ext .ts --fix",
+      "watch": "tsc -p tsconfig.build.json --watch",
+      "prepare": "npm run build",
+      "prepublishOnly": "npm run lint && npm run build",
+      "test": "echo \"No automated tests yet\""
+   },
+   "dependencies": {
+      "axios": "^1.7.7",
+      "dgram-as-promised": "^6.0.0"
+   },
+   "devDependencies": {
+      "@semantic-release/changelog": "6.0.3",
+      "@semantic-release/commit-analyzer": "13.0.1",
+      "@semantic-release/git": "10.0.1",
+      "@semantic-release/github": "11.0.6",
+      "@semantic-release/npm": "12.0.2",
+      "@semantic-release/release-notes-generator": "14.1.0",
+      "@types/node": "^20.14.2",
+      "@typescript-eslint/eslint-plugin": "^6.21.0",
+      "@typescript-eslint/parser": "^6.21.0",
+      "eslint": "^8.57.0",
+      "homebridge": "^1.7.0",
+      "rimraf": "^5.0.5",
+      "semantic-release": "24.2.9",
+      "typescript": "~5.3.3"
+   },
+   "packageManager": "yarn@1.22.22+sha512.a6b2f7906b721bba3d67d4aff083df04dad64c399707841b7acf00f6b133b7ac24255f2652fa22ae3534329dc6180534e98d17432037ff6fd140556e2bb3137e",
+   "donationUrl": "https://paypal.me/feparrav",
+   "funding": {
+      "type": "paypal",
+      "url": "https://paypal.me/feparrav"
+   }
 }
