@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.0.7-beta.9 - 2026-04-24
+
+fix: replace per-call UDP sockets with persistent LAN session per device to fix auth timeout
+
+- Refactor LAN control to use a single persistent UDP socket per device (keyed by MAC)
+- Auth happens once at session creation; session key is reused for all subsequent packets
+- State responses queued and dispatched to first waiting resolver
+- Auth timeout increased from 3s to 5s for reliability
+- sendLocalCommand no longer creates/closes sockets per command
+
 ## v0.0.7-beta.8 - 2026-04-24
 
 fix: LAN commands fire-and-forget and cloud commands use authenticated client
