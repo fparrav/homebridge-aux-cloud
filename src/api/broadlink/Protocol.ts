@@ -162,24 +162,24 @@ export function buildPacket(
   // Device ID
   id.copy(header, 0x30, 0, 4);
 
-  // Inner checksum of plaintext payload (stored before encryption, at 0x34-0x35)
-  let innerChk = 0xbeaf;
-  for (let i = 0; i < payload.length; i += 2) {
-    innerChk = (innerChk + payload[i]) & 0xffff;
-  }
-  header[0x34] = innerChk & 0xff;
-  header[0x35] = (innerChk >> 8) & 0xff;
-
-  // Encrypt payload with AES-128-CBC (cipher.update only — avoids unwanted PKCS#7 padding block)
+  // Encrypt payload with AES-128-CBC (no auto padding)
   const cipher = createCipheriv('aes-128-cbc', key, DEFAULT_IV);
+  cipher.setAutoPadding(false);
   const encryptedPayload = cipher.update(payload);
+  const encryptedFinal = cipher.final();
+  const encrypted = encryptedFinal.length > 0
+    ? Buffer.concat([encryptedPayload, encryptedFinal])
+    : encryptedPayload;
 
-  const packet = Buffer.concat([header, encryptedPayload]);
+  const packet = Buffer.concat([header, encrypted]);
 
-  // Outer checksum over the entire packet
+  // Outer checksum over the entire packet (big-endian word sum, ones complement)
   let outerChk = 0xbeaf;
   for (let i = 0; i < packet.length; i += 2) {
-    outerChk = (outerChk + packet[i]) & 0xffff;
+    outerChk = (outerChk + ((packet[i] << 8) + packet[i + 1])) & 0xffff;
+  }
+  while (outerChk >> 16) {
+    outerChk = ((outerChk & 0xffff) + (outerChk >> 16)) & 0xffff;
   }
   packet[0x20] = outerChk & 0xff;
   packet[0x21] = (outerChk >> 8) & 0xff;

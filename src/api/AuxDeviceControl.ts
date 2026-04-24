@@ -29,6 +29,8 @@ export interface AuxDeviceControlOptions {
 }
 
 const LAN_FAILURE_THRESHOLD = 3;
+const LAN_AUTH_DELAY_MS = 200;   // device needs time after auth to accept commands
+const LAN_RECONNECT_RETRY = 2;   // reconnect attempts when session is lost
 
 interface LanSession {
   socket: ReturnType<typeof createSocket>;
@@ -253,27 +255,50 @@ export class AuxDeviceControl {
     session.authenticated = true;
   }
 
-  /**
-   * Envía comando LAN con session persistente.
-   */
+   /**
+    * Envía comando LAN con session persistente y retry con re-auth en fallo.
+    * Los dispositivos Broadlink cuelgan sesiones idle — se reconecta solo cuando se pierde.
+    */
   private async sendLocalCommand(
     ip: string,
     mac: string,
     params: Record<string, number>,
   ): Promise<void> {
-    const session = await this.getOrCreateSession(ip, mac);
-
     const normalizedParams = { ...params };
     if (normalizedParams['temp'] !== undefined && normalizedParams['temp'] > 100) {
       normalizedParams['temp'] = normalizedParams['temp'] / 10;
     }
     const macBuf = Buffer.from(mac.split(':').map((b) => parseInt(b, 16)));
     const commandPayload = buildCommandPayload(normalizedParams);
-    const cmdPacket = buildPacket(commandPayload, BroadlinkCommand.Packet, macBuf, session.id, session.count++, session.key);
-    session.socket.send(cmdPacket, 0, cmdPacket.length, 80, ip);
-    this.logger?.warn('[LAN] Sending command to %s: %j', ip, normalizedParams);
-    // fire-and-forget, no response expected
+
+    // Retry with re-auth on failure (session may be dropped by device)
+    for (let attempt = 0; attempt <= LAN_RECONNECT_RETRY; attempt++) {
+      let session: LanSession;
+      try {
+        session = await this.getOrCreateSession(ip, mac);
+      } catch {
+        if (attempt === LAN_RECONNECT_RETRY) throw new Error('LAN auth failed');
+        await new Promise((resolve) => setTimeout(resolve, LAN_AUTH_DELAY_MS));
+        continue;
+      }
+
+      const cmdPacket = buildPacket(commandPayload, BroadlinkCommand.Packet, macBuf, session.id, session.count++, session.key);
+      await new Promise<void>((resolve, reject) => {
+        session.socket.send(cmdPacket, 0, cmdPacket.length, 80, ip, (err) => {
+          if (err) {
+            session.authenticated = false;
+            reject(err);
+          } else {
+            resolve();
+          }
+        });
+      });
+      this.logger?.warn('[LAN] Sending command to %s: %j', ip, normalizedParams);
+      return;
+    }
+    throw new Error(`LAN command failed for ${ip} after ${LAN_RECONNECT_RETRY + 1} attempts`);
   }
+
 
   /**
    * Envía comando cloud con retry.
@@ -352,42 +377,51 @@ export class AuxDeviceControl {
     this.recordSuccess(endpointId);
   }
 
-  /**
-   * Polls device state via LAN UDP with persistent session.
-   * Returns params map or null on failure.
-   */
+    /**
+     * Polls device state via LAN UDP with persistent session y retry.
+     * Returns params map or null on failure.
+     * El polling periódico mantiene el keep-alive de la sesión.
+     */
   async pollLocalState(ip: string, mac: string): Promise<Record<string, number> | null> {
-    let session: LanSession;
-    try {
-      session = await this.getOrCreateSession(ip, mac);
-    } catch {
-      this.logger?.warn('[LAN] Auth failed for %s — skipping poll', ip);
-      return null;
-    }
+    const macBuf = Buffer.from(mac.split(':').map((b) => parseInt(b, 16)));
+    const statePayload = Buffer.from('0C00BB0006800000020011012B7E0000', 'hex');
 
-    const stateResponse = await new Promise<Buffer | null>((resolve) => {
-      const timeout = setTimeout(() => resolve(null), 5000);
-      session.stateResolvers.push((msg) => { clearTimeout(timeout); resolve(msg); });
-      const macBuf = Buffer.from(mac.split(':').map((b) => parseInt(b, 16)));
-      const statePayload = Buffer.from('0C00BB0006800000020011012B7E0000', 'hex');
+     // Retry with re-auth on failure (session may be dropped by device)
+    for (let attempt = 0; attempt <= LAN_RECONNECT_RETRY; attempt++) {
+      let session: LanSession;
+      try {
+        session = await this.getOrCreateSession(ip, mac);
+        } catch {
+        if (attempt === LAN_RECONNECT_RETRY) {
+          this.logger?.warn('[LAN] Auth failed for %s — skipping poll', ip);
+          return null;
+          }
+        await new Promise((resolve) => setTimeout(resolve, LAN_AUTH_DELAY_MS));
+        continue;
+        }
+
       const statePacket = buildPacket(statePayload, BroadlinkCommand.Packet, macBuf, session.id, session.count++, session.key);
-      session.socket.send(statePacket, 0, statePacket.length, 80, ip);
-    });
+      const stateResponse = await new Promise<Buffer | null>((resolve) => {
+        const timeout = setTimeout(() => resolve(null), 5000);
+        session.stateResolvers.push((msg) => { clearTimeout(timeout); resolve(msg); });
+        session.socket.send(statePacket, 0, statePacket.length, 80, ip);
+        });
 
-    if (stateResponse === null) {
-      this.logger?.warn('[LAN] State poll timeout for %s', ip);
-      session.authenticated = false;
-      return null;
-    }
+      if (stateResponse === null) {
+        this.logger?.warn('[LAN] State poll timeout for %s (attempt %d/%d)', ip, attempt + 1, LAN_RECONNECT_RETRY + 1);
+        session.authenticated = false;
+        continue;
+        }
 
-    const decrypted = decryptPayload(stateResponse, session.key);
-
-    const params = this.parseDecryptedState(decrypted);
-    if (params === null) {
-      this.logger?.debug('[LAN] Decrypted payload too short (%d bytes) for %s', decrypted.length, ip);
-      return null;
-    }
-    this.logger?.warn('[LAN] State OK for %s (%d bytes): pwr=%d temp=%d', ip, decrypted.length, params.pwr, params.temp);
-    return params;
-  }
+      const decrypted = decryptPayload(stateResponse, session.key);
+      const params = this.parseDecryptedState(decrypted);
+      if (params === null) {
+        this.logger?.debug('[LAN] Decrypted payload too short (%d bytes) for %s', decrypted.length, ip);
+        return null;
+        }
+      this.logger?.warn('[LAN] State OK for %s (%d bytes): pwr=%d temp=%d', ip, decrypted.length, params.pwr, params.temp);
+      return params;
+      }
+    return null;
+   }
 }
