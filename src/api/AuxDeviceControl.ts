@@ -323,8 +323,12 @@ export class AuxDeviceControl {
     const mapping = mac ? this.getDeviceMapping(mac) : null;
     if (mapping) {
       const deviceStrategy = mac ? this.deviceMappings.get(mac)?.controlStrategy : undefined;
+      // Merge current device state with new params so the command always carries the full AC state.
+      // buildCommandPayload defaults missing fields to 0 (pwr=0), which would turn the device off
+      // if we send a partial command like {ac_mode: 1} without including pwr.
+      const fullParams = { ...(device.params ?? {}), ...params };
       try {
-        await this.sendLocalCommand(mapping.ip, mapping.mac, params);
+        await this.sendLocalCommand(mapping.ip, mapping.mac, fullParams);
         this.recordSuccess(endpointId);
         return;
       } catch {

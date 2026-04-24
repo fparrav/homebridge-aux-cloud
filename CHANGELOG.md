@@ -1,3 +1,11 @@
+## v0.0.7-beta.11 - 2026-04-24
+
+fix: LAN commands carry full device state to prevent unintended power-off
+
+- Fix: `sendCommand` for LAN devices now merges `device.params` (current AC state) with the incoming partial params before calling `buildCommandPayload`
+- Root cause: `buildCommandPayload` defaults `pwr` to 0 when not included in params; sending `{ac_mode:0}` alone would turn the device off immediately after turning it on
+- Commands now match the reference implementation behavior: always send the complete AC state with only the changed param overridden
+
 ## v0.0.7-beta.10 - 2026-04-24
 
 fix: visible LAN diagnostic logs and LAN-only device state
