@@ -1,0 +1,280 @@
+/**
+ * Broadlink LAN protocol helpers based on homebridge-broadlink-heater-cooler
+ * (makleso6). AES-128-CBC with fixed key/IV for older firmware AC devices.
+ */
+
+import { createCipheriv, createDecipheriv } from 'crypto';
+
+// Default AES key and IV for Broadlink devices (older firmware)
+const DEFAULT_KEY = Buffer.from([
+  0x09, 0x76, 0x28, 0x34, 0x3f, 0xe9, 0x9e, 0x23,
+  0x76, 0x5c, 0x15, 0x13, 0xac, 0xcf, 0x8b, 0x02,
+]);
+
+const DEFAULT_IV = Buffer.from([
+  0x56, 0x2e, 0x17, 0x09, 0x6d, 0x09, 0x3d, 0x28,
+  0xdd, 0xb3, 0xba, 0x69, 0x5a, 0x2e, 0x6f, 0x58,
+]);
+
+export enum BroadlinkCommand {
+  Auth = 0x65,
+  Packet = 0x6a,
+  // Responses
+  ResponseFixation = 0xe9,
+  ResponseState = 0xee,
+}
+
+export enum BroadlinkPower {
+  Off = 0,
+  On = 1,
+}
+
+export enum BroadlinkMode {
+  Cooling = 0,
+  Heating = 1,
+  Dry = 2,
+  Fan = 3,
+  Auto = 4,
+}
+
+export enum BroadlinkFanSpeed {
+  Auto = 0,
+  Low = 1,
+  Medium = 2,
+  High = 3,
+  Turbo = 4,
+  Mute = 5,
+}
+
+export interface BroadlinkAState {
+  power: BroadlinkPower;
+  temp: number;
+  mode: BroadlinkMode;
+  fanspeed: BroadlinkFanSpeed;
+  verticalFixation: number;
+  horizontalFixation: number;
+  turbo: number;
+  mute: number;
+  health: number;
+  clean: number;
+  display: number;
+  mildew: number;
+  sleep: number;
+  ambientTemp?: number;
+}
+
+// Packet header magic bytes
+const HEADER_MAGIC = Buffer.from([
+  0x5a, 0xa5, 0xaa, 0x55,
+  0x5a, 0xa5, 0xaa, 0x55,
+]);
+
+/**
+ * Calculate 16-bit checksum (sum all bytes, wrap around, XOR with 0xffff).
+ */
+export function calculateChecksum(data: Buffer): number {
+  let sum = 0;
+  for (let i = 0; i < data.length; i++) {
+    sum = (sum + data[i]) & 0xffff;
+  }
+  while (sum >> 16) {
+    sum = ((sum & 0xffff) + (sum >> 16)) & 0xffff;
+  }
+  return 0xffff ^ sum;
+}
+
+/**
+ * Encrypt payload with AES-128-CBC (zero padding, no auto padding).
+ */
+export function encryptPayload(payload: Buffer): Buffer {
+  const cipher = createCipheriv('aes-128-cbc', DEFAULT_KEY, DEFAULT_IV);
+  cipher.setAutoPadding(false);
+  const encrypted = cipher.update(payload);
+  const final = cipher.final();
+  return final.length > 0 ? Buffer.concat([encrypted, final]) : encrypted;
+}
+
+/**
+ * Decrypt response from device.
+ */
+export function decryptPayload(response: Buffer): Buffer {
+  const encPayload = Buffer.alloc(response.length - 0x38);
+  response.copy(encPayload, 0, 0x38);
+  const decipher = createDecipheriv('aes-128-cbc', DEFAULT_KEY, DEFAULT_IV);
+  decipher.setAutoPadding(false);
+  const payload = decipher.update(encPayload);
+  const final = decipher.final();
+  return final.length > 0 ? Buffer.concat([payload, final]) : payload;
+}
+
+/**
+ * Build a Broadlink UDP packet wrapper.
+ * Format: [8-byte header][2-byte checksum][2-byte count][6-byte MAC][4-byte ID][payload]
+ */
+export function buildPacket(payload: Buffer, command: BroadlinkCommand, mac: Buffer, id: Buffer = Buffer.alloc(4, 0)): Buffer {
+  const count = Buffer.alloc(2, 0);
+  // count is incremented by sender externally
+
+  const payloadLen = payload.length;
+  const packet = Buffer.alloc(0x38 + payloadLen, 0);
+
+  // Header
+  HEADER_MAGIC.copy(packet, 0);
+
+  // Checksum (position 0x20)
+  let chksum = 0xbeaf;
+  for (let i = 0; i < payloadLen; i++) {
+    chksum = (chksum + payload[i]) & 0xffff;
+  }
+  packet[0x20] = chksum & 0xff;
+  packet[0x21] = (chksum >> 8) & 0xff;
+
+  // Command type
+  packet[0x26] = command;
+
+  // Count
+  packet[0x28] = count[0];
+  packet[0x29] = count[1];
+
+  // MAC address
+  mac.copy(packet, 0x2a, 0, 6);
+
+  // Device ID
+  id.copy(packet, 0x30, 0, 4);
+
+  // Payload
+  payload.copy(packet, 0x38);
+
+  // Outer checksum
+  let outerChksum = 0xbeaf;
+  for (let i = 0; i < packet.length; i++) {
+    outerChksum = (outerChksum + packet[i]) & 0xffff;
+  }
+  packet[0x20] = outerChksum & 0xff;
+  packet[0x21] = (outerChksum >> 8) & 0xff;
+
+  return packet;
+}
+
+/**
+ * Build a command payload for AC control (power, temp, mode, fan, swing, etc).
+ * Based on the updateModel method from broadlink-aircon-api.
+ */
+export function buildCommandPayload(
+  params: Record<string, number>,
+): Buffer {
+  const power = params['pwr'] ?? 0;
+  const temp = params['temp'] ?? 24;
+  const mode = params['ac_mode'] ?? 0;
+  const fanspeed = params['ac_mark'] ?? 0;
+  const verticalFixation = params['ac_vdir'] ?? 0;
+  const horizontalFixation = params['ac_hdir'] ?? 0;
+  const turbo = params['turbo'] ?? 0;
+  const mute = params['mute'] ?? 0;
+  const health = params['ac_health'] ?? 0;
+  const clean = params['ac_clean'] ?? 0;
+  const display = params['scrdisp'] ?? 0;
+  const mildew = params['mldprf'] ?? 0;
+
+  // Temperature encoding: actual temp - 8, stored in bits 3-7
+  let temperature = temp - 8;
+  if (temperature < 0) temperature = 0;
+  const hasHalfDegree = !Number.isInteger(temp);
+
+  const payload = Buffer.alloc(23, 0);
+  payload[0] = 0xbb;
+  payload[1] = 0x00;
+  payload[2] = 0x06; // Command: 0x06 = set, 0x07 = get info
+  payload[3] = 0x80;
+  payload[4] = 0x00;
+  payload[5] = 0x00;
+  payload[6] = 0x0f; // Set status
+  payload[7] = 0x00;
+  payload[8] = 0x01;
+  payload[9] = 0x01;
+  // Byte 10: temperature (bits 3-7) | verticalFixation (bits 0-2)
+  payload[10] = (temperature << 3) | (verticalFixation & 0x07);
+  // Byte 11: horizontalFixation (bits 5-7)
+  payload[11] = (horizontalFixation & 0x07) << 5;
+  // Byte 12: half-degree flag (bit 7)
+  payload[12] = hasHalfDegree ? 0x80 : 0x00;
+  // Byte 13: fanspeed (bits 5-7)
+  payload[13] = (fanspeed & 0x07) << 5;
+  // Byte 14: turbo (bit 6) | mute (bit 7)
+  payload[14] = (turbo & 0x01) << 6 | (mute & 0x01) << 7;
+  // Byte 15: mode (bits 5-8) | sleep (bits 2-3)
+  payload[15] = (mode & 0x0f) << 5 | (params['ac_slp'] ?? 0) << 2;
+  payload[16] = 0x00;
+  payload[17] = 0x00;
+  // Byte 18: power (bits 0-4) | health (bit 1) | clean (bit 2)
+  payload[18] = (power & 0x01) << 5 | (health & 0x01) << 1 | (clean & 0x01) << 2;
+  payload[19] = 0x00;
+  // Byte 20: display (bit 4) | mildew (bits 3-4)
+  payload[20] = (display & 0x01) << 4 | (mildew & 0x01) << 3;
+  payload[21] = 0x00;
+  payload[22] = 0x00;
+
+  const length = payload.length;
+  const requestPayload = Buffer.alloc(32, 0);
+  requestPayload[0] = length + 2;
+  payload.copy(requestPayload, 2);
+
+  const checksum = calculateChecksum(payload);
+  requestPayload[length + 2] = (checksum >> 8) & 0xff;
+  requestPayload[length + 3] = checksum & 0xff;
+
+  return requestPayload;
+}
+
+/**
+ * Build a getState request (magic bytes for querying device state).
+ */
+export function buildGetStatePacket(mac: Buffer): Buffer {
+  const magic = Buffer.from('0C00BB0006800000020011012B7E0000', 'hex');
+  return buildPacket(magic, BroadlinkCommand.Packet, mac);
+}
+
+/**
+ * Build a getInfo request (queries ambient temperature, etc).
+ */
+export function buildGetInfoPacket(mac: Buffer): Buffer {
+  const magic = Buffer.from('0C00BB0006800000020021011B7E0000', 'hex');
+  return buildPacket(magic, BroadlinkCommand.Packet, mac);
+}
+
+/**
+ * Parse a response payload to extract AC state.
+ * Based on updateStatus and updateInfo from broadlink-aircon-api.
+ */
+export function parseStatePayload(payload: Buffer): Partial<BroadlinkAState> {
+  const state: Partial<BroadlinkAState> = {};
+
+  if (payload.length === 32) {
+    // updateStatus
+    state.temp = 8 + (payload[12] >> 3);
+    state.power = (payload[20] >> 5) & 0x01;
+    state.verticalFixation = payload[12] & 0x07;
+    state.mode = (payload[17] >> 5) & 0x0f;
+    state.sleep = (payload[17] >> 2) & 0x01;
+    state.display = (payload[22] >> 4) & 0x01;
+    state.mildew = (payload[22] >> 3) & 0x01;
+    state.health = (payload[20] >> 1) & 0x01;
+    state.horizontalFixation = (payload[12] & 0x07) << 0;
+    state.fanspeed = (payload[15] >> 5) & 0x07;
+    state.mute = (payload[16] >> 7) & 0x01;
+    state.turbo = (payload[16] >> 6) & 0x01;
+    state.clean = (payload[20] >> 2) & 0x01;
+  }
+
+  if (payload.length === 48) {
+    // updateInfo — ambient temperature
+    const amb_05 = payload[33] / 10;
+    let amb = payload[17] & 0x1f;
+    if (payload[17] > 63) {
+      amb += 32;
+    }
+    state.ambientTemp = amb_05 + amb;
+  }
+
+  return state;
+}

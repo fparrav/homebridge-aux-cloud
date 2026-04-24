@@ -1,40 +1,34 @@
 # Changelog
 
+## v0.0.7-beta.2 - 2026-04-23
+
+feat: LAN-only devices, MAC-based mapping, mandatory discovery
+
+- Support devices without AUX Cloud account (`mac` + `name` only, no `endpointId`)
+  - Plugin creates synthetic HomeKit accessories controlled 100% via LAN UDP
+  - LAN-only devices never attempt cloud fallback
+- Change device mapping index from `endpointId` to `mac` (MAC is the stable identifier)
+- Discovery is now mandatory when `localControlEnabled: true` — explicit error if no devices found
+- Cloud fallback triggers after exactly 3 consecutive LAN failures (was immediate)
+- `controlStrategy: "local"` devices throw immediately on LAN failure, no silent cloud retry
+- Add `name` field to device config entries (required for LAN-only devices)
+- Update README with LAN-only device guide, device type table, and production config example
+- Update `config.schema.json` with `name` field and improved descriptions
+
 ## v0.0.7-beta.1 - 2026-04-24
 
 feat: local LAN control with cloud fallback
 
-- Add local-first/cloud-only control strategy for Broadlink-based AUX devices (AC Freedom, etc.)
+- Add `local-first` / `cloud-only` control strategy for Broadlink-based AUX devices (AC Freedom, etc.)
 - Implement Broadlink LAN protocol (UDP) with AES-128-CBC encryption
-- Add dgram-as-promised dependency for UDP socket management
+- Add `dgram-as-promised` dependency for UDP socket management
 - Auto-discover Broadlink devices on LAN via UDP broadcast at startup
-- Per-device controlStrategy override (force local or cloud per device)
+- Per-device `controlStrategy` override (force `local` or `cloud` per device)
 - Local polling for devices with known IP/MAC in refresh loop
 - Cloud fallback after 3 consecutive LAN failures
 - Update README with LAN control config docs and acknowledgements
 
-Note: Local LAN control requires devices running older Broadlink-based firmware. Newer firmware may use a different protocol.
-
-## v0.0.6 - 2026-04-23
-
-## v0.0.6 - 2026-04-23
-
-Fixes:
-- **Fix optimistic UI for power state**: handleTargetStateSet ahora envía el estado optimista correctamente antes de confirmar con la API cloud
-- **Fix pending guard**: Se agregó guard para evitar comandos concurrentes que podían desincronizar el estado del dispositivo
-
-Internal:
-- ci: detect pre-release version tag to use beta dist-tag instead of latest
-
-## v0.0.6-beta.2 - 2026-04-22
-
-## What's Changed
-
-- fix: `handleTargetStateSet` now correctly applies optimistic power state (`AC_POWER=1`) and registers a 4 s pending-command guard when it needs to power the device on before changing mode. Previously these were missing, which could allow a poll to overwrite the optimistic state before the cloud confirmed the command — leading in some cases to the device physically turning off after a subsequent temperature command.
-
-## Notes
-
-> **Cloud-only control**: This plugin routes all commands through the AUX Cloud API. There is no local LAN control option — every device uses cloud control regardless of network topology. Local LAN control is planned for a future release.
+**Note:** Local LAN control requires devices running older Broadlink-based firmware. Newer firmware may use a different protocol.
 
 ## v0.0.6-beta.1 - 2026-04-21
 

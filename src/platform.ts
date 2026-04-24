@@ -8,11 +8,8 @@ import type {
   Service,
 } from 'homebridge';
 
-import {
-  AuxApiError,
-  AuxCloudClient,
-  type AuxDevice,
-} from './api/AuxCloudClient';
+import { AuxApiError, AuxCloudClient, type AuxDevice } from './api/AuxCloudClient';
+import { AuxDeviceControl } from './api/AuxDeviceControl';
 import { AuxCloudPlatformAccessory } from './platformAccessory';
 import { PLATFORM_NAME, PLUGIN_NAME } from './settings';
 
@@ -47,6 +44,17 @@ export interface AuxCloudPlatformConfig extends PlatformConfig {
    // Optimistic UI settings
   commandRetryCount?: number;
   commandTimeoutMs?: number;
+
+     // Local (LAN) control settings
+  controlStrategy?: 'local-first' | 'cloud-only';
+  localControlEnabled?: boolean;
+  devices?: Array<{
+    endpointId?: string;
+    mac?: string;
+    ip?: string;
+    name?: string;
+    controlStrategy?: 'local' | 'cloud';
+   }>;
 }
 
 export class AuxCloudPlatform implements DynamicPlatformPlugin {
@@ -63,6 +71,8 @@ export class AuxCloudPlatform implements DynamicPlatformPlugin {
   private readonly config: AuxCloudPlatformConfig;
 
   private readonly client: AuxCloudClient;
+
+  private readonly deviceControl: AuxDeviceControl;
 
   private readonly includeIds: Set<string>;
 
@@ -140,6 +150,16 @@ export class AuxCloudPlatform implements DynamicPlatformPlugin {
       requestTimeoutMs: this.commandTimeoutMs,
      });
 
+      // Device control with local/cloud selection
+      this.deviceControl = new AuxDeviceControl({
+        region: this.config.region ?? 'eu',
+        logger: this.log,
+        commandTimeoutMs: this.commandTimeoutMs,
+        commandRetryCount: this.commandRetryCount,
+        localControlEnabled: this.config.localControlEnabled,
+        devices: this.config.devices,
+      });
+
     this.log.debug(
        'Finished initializing platform: %s (retryCount=%d, timeout=%dms)',
       this.config.name,
@@ -191,41 +211,29 @@ export class AuxCloudPlatform implements DynamicPlatformPlugin {
     await this.sendDeviceParamsWithRetry(device, params);
    }
 
-   /**
-    * Envía params a la cloud con retry y timeout configurable.
-    * Espera a que terminen todos los intentos (o hasta el éxito).
-    */
-  public async sendDeviceParamsWithRetry(
-    device: AuxDevice,
-    params: Record<string, number>,
-    retryCount: number = this.commandRetryCount,
-   ): Promise<void> {
-    const attempts = retryCount + 1;
 
-    for (let attempt = 0; attempt < attempts; attempt++) {
-      try {
-        await this.client.setDeviceParams(device, params);
-        return;
-       } catch (error) {
-        this.log.debug(
-           'AuxCloudPlatform: attempt %d/%d failed for %s: %s',
-          attempt + 1,
-          attempts,
-          device.endpointId,
-          error instanceof Error ? error.message : String(error),
-         );
-
-        if (attempt < retryCount) {
-          const delayMs = Math.min(500 * Math.pow(2, attempt), 3000);
-          await new Promise((resolve) => setTimeout(resolve, delayMs));
+      /**
+       * Envía params al dispositivo con local/cloud selection y retry.
+       * Delega a AuxDeviceControl para selección automática.
+       */
+      public async sendDeviceParamsWithRetry(
+        device: AuxDevice,
+        params: Record<string, number>,
+        retryCount: number = this.commandRetryCount,
+        ): Promise<void> {
+        try {
+          await this.deviceControl.sendCommand(device, params, {
+            globalStrategy: this.config.controlStrategy,
+            localRetryCount: retryCount,
+            cloudRetryCount: retryCount,
+             });
+           } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          this.log.error('Failed to control %s: %s. Params: %o', device.endpointId, message, params);
+          throw new AuxApiError(message);
+           }
          }
-       }
-     }
 
-    const message = `Failed to control ${device.endpointId} after ${attempts} attempts`;
-    this.log.error('%s. Params: %o', message, params);
-    throw new AuxApiError(message);
-   }
 
    /**
     * Dispara el comando en background. El caller ya aplicó el estado optimista.
@@ -303,14 +311,52 @@ export class AuxCloudPlatform implements DynamicPlatformPlugin {
      }, delayMs);
    }
 
-  private async initialize(): Promise<void> {
-    await this.refreshDevices();
+private getLanOnlyDevices(): AuxDevice[] {
+    if (!this.config.localControlEnabled) return [];
+    return this.deviceControl.getLanOnlyMappings().map((mapping) => {
+      const normalizedMac = mapping.mac.toLowerCase();
+      const endpointId = `lan-${normalizedMac.replace(/:/g, '')}`;
+      return (
+        this.devicesById.get(endpointId) ?? {
+          endpointId,
+          friendlyName: mapping.name,
+          productId: 'broadlink',
+          devSession: '',
+          devicetypeFlag: 0,
+          cookie: '',
+          mac: normalizedMac,
+          params: {},
+          state: 0,
+        }
+      );
+    });
+  }
 
-    const intervalSeconds = this.validatePollInterval(this.config.pollInterval);
-    this.refreshTimer = setInterval(() => {
-      void this.refreshDevices();
-     }, intervalSeconds * 1000);
-   }
+  private async initialize(): Promise<void> {
+    if (this.config.localControlEnabled) {
+      const { DeviceDiscovery } = await import('./api/broadlink/DeviceDiscovery');
+      let discovered: Awaited<ReturnType<typeof DeviceDiscovery.discover>>;
+      try {
+        discovered = await DeviceDiscovery.discover(3000);
+      } catch (error) {
+        throw new Error(`LAN discovery failed: ${error}. Disable localControlEnabled or fix network connectivity.`);
+      }
+      if (discovered.length === 0) {
+        throw new Error('LAN discovery found no Broadlink devices. Check your network or disable localControlEnabled.');
+      }
+      for (const dev of discovered) {
+        this.deviceControl.registerDiscoveredDevice(dev);
+        this.log.info('Discovered Broadlink device: %s (MAC: %s)', dev.ip, dev.mac);
+      }
+    }
+
+      await this.refreshDevices();
+
+      const intervalSeconds = this.validatePollInterval(this.config.pollInterval);
+      this.refreshTimer = setInterval(() => {
+        void this.refreshDevices();
+         }, intervalSeconds * 1000);
+        }
 
   private validatePollInterval(interval?: number): number {
     if (!interval || Number.isNaN(interval) || interval < 30) {
@@ -322,30 +368,56 @@ export class AuxCloudPlatform implements DynamicPlatformPlugin {
     return interval;
    }
 
+
+
   private async refreshDevices(): Promise<void> {
     if (this.isSyncing) {
       return;
-     }
+       }
     this.isSyncing = true;
 
     try {
       await this.client.ensureLoggedIn(this.config.username!, this.config.password!);
 
-      const devices = await this.client.listDevices({
+      const cloudDevices = await this.client.listDevices({
         includeIds: this.includeIds,
         excludeIds: this.excludeIds,
-       });
+      });
 
-      this.log.debug('Fetched %d AUX Cloud devices', devices.length);
-      this.reconcileAccessories(devices);
-     } catch (error) {
+      this.log.debug('Fetched %d AUX Cloud devices', cloudDevices.length);
+
+      const lanOnlyDevices = this.getLanOnlyDevices();
+      const allDevices = [...cloudDevices, ...lanOnlyDevices];
+
+      if (this.config.localControlEnabled) {
+        for (const device of allDevices) {
+          const mac = device.mac;
+          if (!mac) continue;
+          const mapping = this.deviceControl.getDeviceMapping(mac);
+          if (!mapping) continue;
+          try {
+            const localParams = await this.deviceControl.pollLocalState(mapping.ip, mapping.mac);
+            if (localParams != null) {
+              device.params = { ...device.params, ...localParams };
+              device.state = 1;
+              this.log.debug('Local poll OK for %s', device.endpointId);
+            }
+          } catch {
+            this.deviceControl.recordFailure(device.endpointId);
+            this.log.debug('Local poll failed for %s', device.endpointId);
+          }
+        }
+      }
+
+      this.reconcileAccessories(allDevices);
+       } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       this.log.error('Failed to refresh AUX Cloud devices: %s', message);
       this.client.invalidateSession();
-     } finally {
+       } finally {
       this.isSyncing = false;
-     }
-   }
+       }
+      }
 
   private reconcileAccessories(devices: AuxDevice[]): void {
     const seen = new Set<string>();

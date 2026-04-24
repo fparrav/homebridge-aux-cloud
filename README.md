@@ -53,7 +53,66 @@ After installing, open Homebridge Config UI X → Plugins → `AuxCloudPlatform`
 - `includeDeviceIds` – optional list of AUX endpoint IDs to expose. Leave empty to include everything.
 - `excludeDeviceIds` – optional list to hide specific devices (handy if you only want HVAC and not the accompanying water heater, for example).
 
-The configuration schema (`config.schema.json`) surfaces the same options inside the UI, with inline help text.
+### Local LAN Control
+
+Starting with v0.0.7, this plugin supports local LAN control for Broadlink-based AUX devices (AC Freedom, etc.) with cloud fallback.
+
+- `controlStrategy` – how to route commands: `cloud-only` (default) or `local-first` (tries LAN, falls back to cloud after 3 consecutive failures).
+- `localControlEnabled` – when `true`, enables LAN discovery and local command routing. **Discovery is mandatory**: the plugin will fail to start if no Broadlink devices are found on the network.
+- `devices` – device list, indexed by **MAC address**. Supports two types of device:
+
+| Type | Required fields | Optional fields |
+|------|----------------|-----------------|
+| **LAN-only** (no AUX Cloud account) | `mac`, `name` | `ip`, `controlStrategy` |
+| **Cloud + LAN** (registered in AUX Cloud) | `mac`, `endpointId` | `ip`, `name`, `controlStrategy` |
+
+#### LAN-only devices (no internet, no AUX Cloud account)
+
+Devices intentionally kept off the internet (to prevent firmware updates that may break local control) can still be fully controlled via HomeKit. Configure them with `mac` + `name` only — no `endpointId` needed.
+
+```jsonc
+{
+  "platform": "AuxCloudPlatform",
+  "name": "Aux Cloud",
+  "username": "your@email.com",
+  "password": "your-password",
+  "region": "usa",
+  "controlStrategy": "local-first",
+  "localControlEnabled": true,
+  "devices": [
+    {
+      "mac": "c8:f7:42:9c:9c:cc",
+      "name": "Aire Sala"
+    },
+    {
+      "mac": "ec:0b:ae:0b:c4:c8",
+      "name": "Aire Martin"
+    },
+    {
+      "mac": "ec:0b:ae:a4:65:fb",
+      "ip": "192.168.30.170",
+      "endpointId": "00000000000000000000ec0baea465fb"
+    }
+  ]
+}
+```
+
+In this example, *Aire Sala* and *Aire Martin* are controlled 100% via LAN UDP — they never touch the AUX Cloud API. *Aire Dormitorio* is a cloud device with an optional static IP for faster local polling.
+
+**LAN-only rules:**
+- LAN-only devices always use `controlStrategy: "local"` — cloud fallback is never attempted.
+- If the device is unreachable, the HomeKit command fails immediately (no silent retry to cloud).
+- State is polled via UDP at every refresh interval.
+
+#### Discovery and static IPs
+
+When `localControlEnabled` is `true`, the plugin broadcasts a UDP discovery packet at startup. Devices found via discovery don't need an `ip` field. If a device is not found (e.g. on a different VLAN or the broadcast is blocked), configure its IP explicitly.
+
+Devices that fail discovery **and** have no `ip` configured will not be reachable — configure a static DHCP lease and add the `ip` field.
+
+When `localControlEnabled` is `true`, the plugin **requires** at least one Broadlink device to be discovered at startup. If none are found, initialization fails with an explicit error. Use static IPs or configure the IP field as a fallback.
+
+The configuration schema (`config.schema.json`) surfaces all options inside Homebridge Config UI X, with inline help text.
 
 ## Features
 
@@ -72,8 +131,8 @@ The configuration schema (`config.schema.json`) surfaces the same options inside
 
 > ⚠️ **Considerations**
 >
-> - **Cloud-only control**: All commands are routed through the AUX Cloud API. There is no local LAN control option — every device uses cloud control regardless of your network topology. Local LAN control (for AC Freedom / Broadlink-based devices) is planned for a future release.
-> - Because all commands go to the cloud, response times depend on your internet connection and AUX Cloud server availability. The plugin applies optimistic updates so HomeKit reflects changes instantly, but the physical device follows after cloud confirmation.
+> - **Cloud-only or local-first control**: By default, all commands go through the AUX Cloud API. Starting with v0.0.7, you can enable local LAN control for Broadlink-based devices (AC Freedom) with `localControlEnabled: true`. Local commands fall back to cloud if the device is unreachable.
+> - When using LAN control, response times depend on your local network. Cloud fallback kicks in after 3 consecutive LAN failures.
 > - Only accounts on the public AUX Cloud deployment are supported. Regional/private deployments might use different hosts.
 > - The current release focuses on generic AUX AC units. Heat-pump specific services and extra switches (eco, mildew proof, display, etc.) are on the roadmap.
 > - The AUX Cloud service can occasionally throttle requests. Keep the poll interval ≥60 s if you have many devices.
@@ -111,6 +170,8 @@ Contributions for unit tests (Vitest/Jest) and mock AUX endpoints are very welco
 ## Acknowledgements
 
 - [maeek/ha-aux-cloud](https://github.com/maeek/ha-aux-cloud) – original Home Assistant integration that inspired this port.
+- [makleso6/homebridge-broadlink-heater-cooler](https://github.com/makleso6/homebridge-broadlink-heater-cooler) – Broadlink LAN API implementation used as reference for local control.
+- [maekpow](https://github.com/maekpow) – Broadlink protocol reverse engineering and packet captures.
 - The Homebridge community for the plugin template and documentation.
 - AUX users who provided packet captures and protocol hints in the HA forums/repo.
 
