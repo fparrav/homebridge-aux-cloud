@@ -12,7 +12,7 @@ const DEFAULT_KEY = Buffer.from([
 ]);
 
 const DEFAULT_IV = Buffer.from([
-  0x56, 0x2e, 0x17, 0x09, 0x6d, 0x09, 0x3d, 0x28,
+  0x56, 0x2e, 0x17, 0x99, 0x6d, 0x09, 0x3d, 0x28,  // byte 3: 0x99 (not 0x09)
   0xdd, 0xb3, 0xba, 0x69, 0x5a, 0x2e, 0x6f, 0x58,
 ]);
 
@@ -96,11 +96,12 @@ export function encryptPayload(payload: Buffer): Buffer {
 
 /**
  * Decrypt response from device.
+ * Accepts optional device-specific key obtained from auth response.
  */
-export function decryptPayload(response: Buffer): Buffer {
-  const encPayload = Buffer.alloc(response.length - 0x38);
-  response.copy(encPayload, 0, 0x38);
-  const decipher = createDecipheriv('aes-128-cbc', DEFAULT_KEY, DEFAULT_IV);
+export function decryptPayload(response: Buffer, key: Buffer = DEFAULT_KEY): Buffer {
+  const encPayload = response.subarray(0x38);
+  if (encPayload.length === 0) return Buffer.alloc(0);
+  const decipher = createDecipheriv('aes-128-cbc', key, DEFAULT_IV);
   decipher.setAutoPadding(false);
   const payload = decipher.update(encPayload);
   const final = decipher.final();
@@ -108,50 +109,80 @@ export function decryptPayload(response: Buffer): Buffer {
 }
 
 /**
- * Build a Broadlink UDP packet wrapper.
- * Format: [8-byte header][2-byte checksum][2-byte count][6-byte MAC][4-byte ID][payload]
+ * Parse auth response (0xe9) to extract device-specific key and ID.
+ * Returns null if response has no payload (some devices omit key exchange).
  */
-export function buildPacket(payload: Buffer, command: BroadlinkCommand, mac: Buffer, id: Buffer = Buffer.alloc(4, 0)): Buffer {
-  const count = Buffer.alloc(2, 0);
-  // count is incremented by sender externally
+export interface AuthResult {
+  key: Buffer;
+  id: Buffer;
+}
 
-  const payloadLen = payload.length;
-  const packet = Buffer.alloc(0x38 + payloadLen, 0);
+export function parseAuthResponse(response: Buffer): AuthResult | null {
+  const payload = decryptPayload(response, DEFAULT_KEY);
+  if (payload.length < 0x14) return null;
+  const key = Buffer.alloc(0x10, 0);
+  payload.copy(key, 0, 0x04, 0x14);
+  const id = Buffer.alloc(4, 0);
+  payload.copy(id, 0, 0x00, 0x04);
+  return { key, id };
+}
 
-  // Header
-  HEADER_MAGIC.copy(packet, 0);
+/**
+ * Build a Broadlink UDP packet wrapper.
+ * Payload is encrypted with AES-128-CBC using the provided key (default key for auth).
+ * Format matches broadlink-aircon-api reference implementation exactly.
+ */
+export function buildPacket(
+  payload: Buffer,
+  command: BroadlinkCommand,
+  mac: Buffer,
+  id: Buffer = Buffer.alloc(4, 0),
+  count: number = 1,
+  key: Buffer = DEFAULT_KEY,
+): Buffer {
+  const header = Buffer.alloc(0x38, 0);
 
-  // Checksum (position 0x20)
-  let chksum = 0xbeaf;
-  for (let i = 0; i < payloadLen; i++) {
-    chksum = (chksum + payload[i]) & 0xffff;
-  }
-  packet[0x20] = chksum & 0xff;
-  packet[0x21] = (chksum >> 8) & 0xff;
+  // Header magic
+  HEADER_MAGIC.copy(header, 0);
+
+  // Required fields (0x24-0x25) — present in reference implementation
+  header[0x24] = 0x2a;
+  header[0x25] = 0x27;
 
   // Command type
-  packet[0x26] = command;
+  header[0x26] = command;
 
-  // Count
-  packet[0x28] = count[0];
-  packet[0x29] = count[1];
+  // Packet count
+  header[0x28] = count & 0xff;
+  header[0x29] = (count >> 8) & 0xff;
 
   // MAC address
-  mac.copy(packet, 0x2a, 0, 6);
+  mac.copy(header, 0x2a, 0, 6);
 
   // Device ID
-  id.copy(packet, 0x30, 0, 4);
+  id.copy(header, 0x30, 0, 4);
 
-  // Payload
-  payload.copy(packet, 0x38);
-
-  // Outer checksum
-  let outerChksum = 0xbeaf;
-  for (let i = 0; i < packet.length; i++) {
-    outerChksum = (outerChksum + packet[i]) & 0xffff;
+  // Inner checksum of plaintext payload (stored before encryption, at 0x34-0x35)
+  let innerChk = 0xbeaf;
+  for (let i = 0; i < payload.length; i++) {
+    innerChk = (innerChk + payload[i]) & 0xffff;
   }
-  packet[0x20] = outerChksum & 0xff;
-  packet[0x21] = (outerChksum >> 8) & 0xff;
+  header[0x34] = innerChk & 0xff;
+  header[0x35] = (innerChk >> 8) & 0xff;
+
+  // Encrypt payload with AES-128-CBC (cipher.update only — avoids unwanted PKCS#7 padding block)
+  const cipher = createCipheriv('aes-128-cbc', key, DEFAULT_IV);
+  const encryptedPayload = cipher.update(payload);
+
+  const packet = Buffer.concat([header, encryptedPayload]);
+
+  // Outer checksum over the entire packet
+  let outerChk = 0xbeaf;
+  for (let i = 0; i < packet.length; i++) {
+    outerChk = (outerChk + packet[i]) & 0xffff;
+  }
+  packet[0x20] = outerChk & 0xff;
+  packet[0x21] = (outerChk >> 8) & 0xff;
 
   return packet;
 }

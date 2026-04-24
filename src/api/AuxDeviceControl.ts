@@ -3,11 +3,12 @@
 * Intenta control LAN si está habilitado y hay IP/MAC; si falla, fallback a cloud.
 */
 
+import { createSocket } from 'dgram';
 import type { Logger } from 'homebridge';
 
 import { AuxCloudClient, type AuxDevice } from './AuxCloudClient';
 import type { DiscoveredDevice } from './broadlink/DeviceDiscovery';
-import { buildCommandPayload, decryptPayload } from './broadlink/Protocol';
+import { BroadlinkCommand, buildCommandPayload, buildPacket, decryptPayload, parseAuthResponse } from './broadlink/Protocol';
 
 export interface DeviceMapping {
   endpointId?: string;
@@ -113,18 +114,20 @@ export class AuxDeviceControl {
 
    /**
     * Build auth payload for LAN device authentication.
+    * Matches broadlink-aircon-api reference exactly.
     */
   private buildAuthPayload(): Buffer {
     const payload = Buffer.alloc(0x50, 0);
-    for (let i = 0x04; i <= 0x0f; i++) payload[i] = 0x31;
+    for (let i = 0x04; i <= 0x12; i++) payload[i] = 0x31;  // 15 bytes (0x04–0x12)
     payload[0x1e] = 0x01;
     payload[0x2d] = 0x01;
     payload[0x30] = 'T'.charCodeAt(0);
     payload[0x31] = 'e'.charCodeAt(0);
     payload[0x32] = 's'.charCodeAt(0);
-    payload[0x33] = ' '.charCodeAt(0);
+    payload[0x33] = 't'.charCodeAt(0);
     payload[0x34] = ' '.charCodeAt(0);
-    payload[0x35] = '1'.charCodeAt(0);
+    payload[0x35] = ' '.charCodeAt(0);
+    payload[0x36] = '1'.charCodeAt(0);
     return payload;
    }
 
@@ -150,106 +153,90 @@ export class AuxDeviceControl {
      };
    }
 
-   /**
-    * Helper: build Broadlink packet wrapper.
-    */
-  private buildPacket(payload: Buffer, command: number, mac: Buffer, id: Buffer = Buffer.alloc(4, 0)): Buffer {
-    const count = Buffer.alloc(2, 0);
+  private createLanSocket(): ReturnType<typeof createSocket> {
+    return createSocket('udp4');
+  }
 
-    const packet = Buffer.alloc(0x38 + payload.length, 0);
+  private bindSocket(socket: ReturnType<typeof createSocket>): Promise<void> {
+    return new Promise((resolve, reject) => {
+      socket.once('error', reject);
+      socket.bind(0, () => { socket.removeListener('error', reject); resolve(); });
+    });
+  }
 
-      // Header
-     Buffer.from([
-        0x5a, 0xa5, 0xaa, 0x55,
-        0x5a, 0xa5, 0xaa, 0x55,
-       ]).copy(packet, 0);
-
-      // Checksum
-    let chksum = 0xbeaf;
-    for (let i = 0; i < payload.length; i++) {
-      chksum = (chksum + payload[i]) & 0xffff;
-      }
-    packet[0x20] = chksum & 0xff;
-    packet[0x21] = (chksum >> 8) & 0xff;
-
-      // Command
-    packet[0x26] = command;
-
-      // Count
-    packet[0x28] = count[0];
-    packet[0x29] = count[1];
-
-      // MAC
-    mac.copy(packet, 0x2a, 0, 6);
-
-      // ID
-    id.copy(packet, 0x30, 0, 4);
-
-      // Payload
-    payload.copy(packet, 0x38);
-
-      // Outer checksum
-    let outerChksum = 0xbeaf;
-    for (let i = 0; i < packet.length; i++) {
-      outerChksum = (outerChksum + packet[i]) & 0xffff;
-      }
-    packet[0x20] = outerChksum & 0xff;
-    packet[0x21] = (outerChksum >> 8) & 0xff;
-
-    return packet;
-     }
+  private sendPacket(socket: ReturnType<typeof createSocket>, pkt: Buffer, ip: string): void {
+    socket.send(pkt, 0, pkt.length, 80, ip);
+  }
 
       /**
-       * Envía comando LAN con retry y two-step auth (auth wait → command send).
+       * Perform auth handshake, returns device key + ID.
+       * Uses default key for auth; device responds with session key.
+       */
+  private async doAuth(
+    socket: ReturnType<typeof createSocket>,
+    ip: string,
+    macBuf: Buffer,
+    count: number,
+  ): Promise<{ key: Buffer; id: Buffer }> {
+    const DEFAULT_KEY_FALLBACK = Buffer.from([0x09,0x76,0x28,0x34,0x3f,0xe9,0x9e,0x23,0x76,0x5c,0x15,0x13,0xac,0xcf,0x8b,0x02]);
+    const authMsg = await new Promise<Buffer | null>((resolve) => {
+      const timeout = setTimeout(() => resolve(null), 3000);
+      socket.on('message', function handler(msg) {
+        if ((msg as Buffer)[0x26] === 0xe9) {
+          clearTimeout(timeout);
+          socket.removeListener('message', handler);
+          resolve(msg as Buffer);
+        }
+      });
+      const authPayload = this.buildAuthPayload();
+      const authPacket = buildPacket(authPayload, BroadlinkCommand.Auth, macBuf, Buffer.alloc(4, 0), count);
+      this.sendPacket(socket, authPacket, ip);
+    });
+
+    if (authMsg === null) throw new Error(`LAN auth timeout for ${ip}`);
+    this.logger?.debug('[LAN] Auth OK for %s', ip);
+
+    const auth = parseAuthResponse(authMsg);
+    return auth ?? { key: DEFAULT_KEY_FALLBACK, id: Buffer.alloc(4, 0) };
+  }
+
+      /**
+       * Envía comando LAN con two-step auth (auth → command con device key).
        */
   private async sendLocalCommand(
     ip: string,
     mac: string,
     params: Record<string, number>,
    ): Promise<void> {
-    const { DgramAsPromised } = await import('dgram-as-promised');
-    const socket = DgramAsPromised.createSocket('udp4');
-
+    const socket = this.createLanSocket();
     try {
-      await socket.bind(0);
+      await this.bindSocket(socket);
       socket.setBroadcast(true);
 
       const macBuf = Buffer.from(mac.split(':').map((b) => parseInt(b, 16)));
+      let count = 1;
 
-         // PASO 1: Auth — registrar listener ANTES de enviar, esperar 0xe9
-      const authResponse = await new Promise<Buffer | null>((resolve) => {
-        const timeout = setTimeout(() => resolve(null), 3000);
-        socket.socket.on('message', (msg) => {
-          if (msg[0x26] === 0xe9) { clearTimeout(timeout); resolve(msg); }
-         });
-        const authPayload = this.buildAuthPayload();
-        const authPacket = this.buildPacket(authPayload, 0x65, macBuf);
-        socket.send(authPacket, 0, authPacket.length, 80, ip);
-       });
+      const { key, id } = await this.doAuth(socket, ip, macBuf, count++);
 
-      if (authResponse === null) {
-        throw new Error(`LAN auth timeout for ${ip}`);
-       }
-
-         // PASO 2: Command send — registrar listener ANTES de enviar, esperar 0xee
       const commandResponse = await new Promise<Buffer | null>((resolve) => {
         const timeout = setTimeout(() => resolve(null), 3000);
-        socket.socket.on('message', (msg) => {
-          if (msg[0x26] === 0xee) { clearTimeout(timeout); resolve(msg); }
-         });
-        // Use Protocol.buildCommandPayload (no double-wrap — returns just the 23-byte AC payload)
+        socket.on('message', function handler(msg) {
+          if ((msg as Buffer)[0x26] === 0xee) {
+            clearTimeout(timeout);
+            socket.removeListener('message', handler);
+            resolve(msg as Buffer);
+          }
+        });
         const commandPayload = buildCommandPayload(params);
-        const cmdPacket = this.buildPacket(commandPayload, 0x6a, macBuf);
-        socket.send(cmdPacket, 0, cmdPacket.length, 80, ip);
-       });
+        const cmdPacket = buildPacket(commandPayload, BroadlinkCommand.Packet, macBuf, id, count++, key);
+        this.sendPacket(socket, cmdPacket, ip);
+      });
 
-      if (commandResponse === null) {
-        throw new Error(`LAN command timeout for ${ip}`);
-       }
+      if (commandResponse === null) throw new Error(`LAN command timeout for ${ip}`);
     } finally {
-      await socket.close();
-         }
-       }
+      socket.close();
+    }
+  }
 
       /**
        * Envía comando cloud con retry.
@@ -329,65 +316,56 @@ export class AuxDeviceControl {
        * Returns params map or null on failure.
        */
   async pollLocalState(ip: string, mac: string): Promise<Record<string, number> | null> {
-    const { DgramAsPromised } = await import('dgram-as-promised');
-    const socket = DgramAsPromised.createSocket('udp4');
-
+    const socket = this.createLanSocket();
     try {
-      await socket.bind(0);
+      await this.bindSocket(socket);
       socket.setBroadcast(true);
 
       const macBuf = Buffer.from(mac.split(':').map((b) => parseInt(b, 16)));
+      let count = 1;
 
-       // PASO 1: Auth — registrar listener ANTES de enviar, esperar 0xe9
-      const authResponse = await new Promise<Buffer | null>((resolve) => {
-        const timeout = setTimeout(() => resolve(null), 3000);
-        socket.socket.on('message', (msg) => {
-          if (msg[0x26] === 0xe9) { clearTimeout(timeout); resolve(msg); }
-         });
-        const authPayload = this.buildAuthPayload();
-        const authPacket = this.buildPacket(authPayload, 0x65, macBuf);
-        socket.send(authPacket, 0, authPacket.length, 80, ip);
-       });
-
-      if (authResponse === null) {
-        this.logger?.debug('[LAN] Auth timeout for %s', ip);
+      let authResult: { key: Buffer; id: Buffer } | null = null;
+      try {
+        authResult = await this.doAuth(socket, ip, macBuf, count++);
+      } catch {
+        this.logger?.debug('[LAN] Auth failed for %s', ip);
         return null;
-       }
-      this.logger?.debug('[LAN] Auth OK for %s', ip);
+      }
+      const { key, id } = authResult;
 
-       // PASO 2: State query — registrar listener ANTES de enviar, esperar 0xee
       const stateResponse = await new Promise<Buffer | null>((resolve) => {
         const timeout = setTimeout(() => resolve(null), 3000);
-        socket.socket.on('message', (msg) => {
-          if (msg[0x26] === 0xee && msg.length >= 0x38 + 16) {
-            clearTimeout(timeout); resolve(msg);
-           }
-         });
+        socket.on('message', function handler(msg) {
+          if ((msg as Buffer)[0x26] === 0xee && (msg as Buffer).length > 0x38) {
+            clearTimeout(timeout);
+            socket.removeListener('message', handler);
+            resolve(msg as Buffer);
+          }
+        });
         const statePayload = Buffer.from('0C00BB0006800000020011012B7E0000', 'hex');
-        const statePacket = this.buildPacket(statePayload, 0x6a, macBuf);
-        socket.send(statePacket, 0, statePacket.length, 80, ip);
-       });
+        const statePacket = buildPacket(statePayload, BroadlinkCommand.Packet, macBuf, id, count++, key);
+        this.sendPacket(socket, statePacket, ip);
+      });
 
       if (stateResponse === null) {
         this.logger?.debug('[LAN] State query timeout for %s', ip);
         return null;
-       }
+      }
 
-      const decrypted = decryptPayload(stateResponse);
+      const decrypted = decryptPayload(stateResponse, key);
       this.logger?.debug('[LAN] Decrypted state (%d bytes): %s', decrypted.length, decrypted.toString('hex'));
 
-       // Parse state from decrypted payload
       const params = this.parseDecryptedState(decrypted);
       if (params === null) {
         this.logger?.debug('[LAN] Decrypted payload too short (%d bytes) for %s', decrypted.length, ip);
         return null;
-       }
-
+      }
       return params;
-       }
-    catch (err) {
+    } catch (err) {
       this.logger?.debug('[LAN] pollLocalState error: %s', err);
       return null;
-       }
-      }
+    } finally {
+      socket.close();
+    }
+  }
 }

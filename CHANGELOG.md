@@ -1,5 +1,16 @@
 # Changelog
 
+## v0.0.7-beta.7 - 2026-04-24
+
+fix: correct Broadlink LAN protocol — IV, packet encryption, device key exchange
+
+- Fix DEFAULT_IV byte 3: was `0x09`, must be `0x99` (matches broadlink-aircon-api reference)
+- Fix `buildPacket`: encrypt payload with AES-128-CBC before sending (device ignored unencrypted packets)
+- Fix `buildPacket`: add required header bytes 0x24-0x25 and inner checksum at 0x34-0x35
+- Fix auth flow: extract device-specific key+ID from 0xe9 auth response; use device key for all subsequent packets
+- Fix `buildAuthPayload`: extend 0x31 range to 0x04–0x12 and correct auth string "Test  1"
+- Refactor LAN methods to use native `dgram` socket directly (cleaner, no DgramAsPromised wrapper needed)
+
 ## v0.0.7-beta.6 - 2026-04-24
 
 fix: fix LAN two-step auth, double-wrap bug, and cloud device caching
