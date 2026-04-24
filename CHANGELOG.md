@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.0.7-beta.2 - 2026-04-24
+
+feat: LAN-only devices (mac + name, no endpointId), MAC-based mapping, mandatory discovery
+
+- LAN-only devices create synthetic HomeKit accessories, controlled 100% via LAN UDP
+- Discovery mandatory with localControlEnabled: explicit error if no devices found
+- Cloud fallback after 3 consecutive LAN failures (not immediate)
+- controlStrategy 'local' never attempts cloud
+- Add name field to device config
+
 ## v0.0.7-beta.2 - 2026-04-23
 
 feat: LAN-only devices, MAC-based mapping, mandatory discovery
