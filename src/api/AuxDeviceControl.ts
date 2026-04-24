@@ -25,6 +25,7 @@ export interface AuxDeviceControlOptions {
   commandRetryCount?: number;
   localControlEnabled?: boolean;
   devices?: DeviceMapping[];
+  cloudClient?: AuxCloudClient;
 }
 
 const LAN_FAILURE_THRESHOLD = 3;
@@ -38,7 +39,7 @@ export class AuxDeviceControl {
 
   constructor(options: AuxDeviceControlOptions) {
     this.logger = options.logger;
-    this.client = new AuxCloudClient({
+    this.client = options.cloudClient ?? new AuxCloudClient({
       region: options.region ?? 'eu',
       logger: options.logger,
       requestTimeoutMs: options.commandTimeoutMs ?? 5000,
@@ -218,21 +219,16 @@ export class AuxDeviceControl {
 
       const { key, id } = await this.doAuth(socket, ip, macBuf, count++);
 
-      const commandResponse = await new Promise<Buffer | null>((resolve) => {
-        const timeout = setTimeout(() => resolve(null), 3000);
-        socket.on('message', function handler(msg) {
-          if ((msg as Buffer)[0x26] === 0xee) {
-            clearTimeout(timeout);
-            socket.removeListener('message', handler);
-            resolve(msg as Buffer);
-          }
-        });
-        const commandPayload = buildCommandPayload(params);
-        const cmdPacket = buildPacket(commandPayload, BroadlinkCommand.Packet, macBuf, id, count++, key);
-        this.sendPacket(socket, cmdPacket, ip);
-      });
-
-      if (commandResponse === null) throw new Error(`LAN command timeout for ${ip}`);
+      // Control commands are fire-and-forget — device does not send 0xee in response to set commands
+      const normalizedParams = { ...params };
+      if (normalizedParams['temp'] !== undefined && normalizedParams['temp'] > 100) {
+        normalizedParams['temp'] = normalizedParams['temp'] / 10;
+      }
+      const commandPayload = buildCommandPayload(normalizedParams);
+      const cmdPacket = buildPacket(commandPayload, BroadlinkCommand.Packet, macBuf, id, count++, key);
+      this.sendPacket(socket, cmdPacket, ip);
+      // Give the UDP packet time to be sent before closing the socket
+      await new Promise((resolve) => setTimeout(resolve, 100));
     } finally {
       socket.close();
     }

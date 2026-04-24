@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.0.7-beta.8 - 2026-04-24
+
+fix: LAN commands fire-and-forget and cloud commands use authenticated client
+
+- Fix `sendLocalCommand`: remove wait for 0xee after control commands — device does not send a response to set commands (was causing all LAN commands to timeout)
+- Fix `sendLocalCommand`: convert temperature from ×10 format (e.g. 240) to raw degrees (24) before encoding for LAN protocol
+- Fix cloud commands: `AuxDeviceControl` now shares the platform's authenticated `AuxCloudClient` instead of creating its own unauthenticated instance — cloud commands for Aire Dormitorio and other cloud devices now use a valid session
+
 ## v0.0.7-beta.7 - 2026-04-24
 
 fix: correct Broadlink LAN protocol — IV, packet encryption, device key exchange

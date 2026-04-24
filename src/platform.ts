@@ -153,7 +153,7 @@ export class AuxCloudPlatform implements DynamicPlatformPlugin {
       requestTimeoutMs: this.commandTimeoutMs,
      });
 
-      // Device control with local/cloud selection
+      // Device control with local/cloud selection — share the platform's logged-in client
       this.deviceControl = new AuxDeviceControl({
         region: this.config.region ?? 'eu',
         logger: this.log,
@@ -161,6 +161,7 @@ export class AuxCloudPlatform implements DynamicPlatformPlugin {
         commandRetryCount: this.commandRetryCount,
         localControlEnabled: this.config.localControlEnabled,
         devices: this.config.devices,
+        cloudClient: this.client,
       });
 
     this.log.debug(
