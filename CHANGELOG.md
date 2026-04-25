@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.0.8-beta.15 - 2026-04-25
+
+## Fix: tres regresiones en el protocolo Broadlink LAN
+
+Corrige tres bugs introducidos en beta.13 que causaban que los dispositivos descartaran silenciosamente todos los comandos:
+
+- **`calculateChecksum` incorrecto** — revertido a byte-sum desde `0xbeaf` sin XOR. El firmware del dispositivo espera `sum = 0xbeaf; for each byte: sum += byte; sum &= 0xffff`.
+- **Inner checksum eliminado** — restaurado el checksum del payload en claro en `header[0x34-0x35]` antes de encriptar.
+- **`cipher.final()` espurio** — eliminado; usamos solo `cipher.update()` para evitar el bloque de padding PKCS#7 que corrompe el payload encriptado.
+
 ## v0.0.8-beta.14 - 2026-04-25
 
 Fix outer checksum algorithm (big-endian word sum with carry fold) and add LAN session retry with re-auth on failure.
