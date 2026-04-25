@@ -1,5 +1,41 @@
 # Changelog
 
+## v0.0.8-beta.19 - 2026-04-25
+
+## Root Cause Fix: Broadlink Wire Protocol Mode/FanSpeed Translation (LAN only)
+
+The Broadlink LAN wire protocol uses **different numeric values** for AC mode and fan speed than the AUX cloud API. This caused:
+
+- Physical remote HEAT → device reports wire `4` → our code read it as `AuxAcModeValue.AUTO(4)` → HomeKit showed **AUTO** instead of **HEAT**
+- Fan AUTO (wire `5`) → our code read it as `AuxFanSpeed.MUTE(5)` → fan speed displayed as MUTE
+
+### Wire protocol (Broadlink reference):
+| Concept | Wire value |
+|---------|-----------|
+| Mode: auto | 0 |
+| Mode: cooling | 1 |
+| Mode: dry | 2 |
+| Mode: heating | 4 |
+| Mode: fan | 6 |
+| Fan: high | 1 |
+| Fan: medium | 2 |
+| Fan: low | 3 |
+| Fan: turbo | 4 |
+| Fan: auto | 5 |
+
+### What changed
+- `Protocol.ts`: Corrected `BroadlinkMode` and `BroadlinkFanSpeed` enum values to match wire protocol
+- `Protocol.ts`: Added translation functions (`auxModeToBroadlinkWire`, `broadlinkWireToAuxMode`, fan equivalents)
+- `Protocol.ts`: `buildCommandPayload` now translates AUX API values → wire values before encoding
+- `Protocol.ts`: `AuxFanSpeed.MUTE(5)` now correctly sets the wire mute bit instead of fanspeed byte
+- `AuxDeviceControl.parseDecryptedState`: Wire values → AUX API values on read
+- **Cloud path is unchanged** — only the LAN code path is affected
+
+### Also in this release (from beta.18)
+- Removed unused `applyFanLevel` private method
+- Replaced deprecated `sendDeviceParams` calls with `sendDeviceParamsWithRetry`
+- Added `mode=X fan=X` to the `State OK` log line for easier diagnostics
+
 ## v0.0.8-beta.18 - 2026-04-25
 
 ## Fixes
