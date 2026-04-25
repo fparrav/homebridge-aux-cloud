@@ -1,5 +1,18 @@
 # Changelog
 
+## v0.0.8-beta.17 - 2026-04-25
+
+## Fixes
+
+### Bug 1: Ambient temperature not shown in HomeKit
+- `pollLocalState` now sends a `getInfo` packet after `getState`, receives the 48-byte ambient temperature response, and stores it as `envtemp` in device params.
+- `CurrentTemperature` in HomeKit now shows the actual room temperature instead of the hardcoded 24°C default.
+
+### Bug 2 & 3: Fan speed erratic / mode erratic
+- `handleRotationSpeedGet` now returns the minimum slider value when `ac_mark === AuxFanSpeed.AUTO`, preventing the slider from displaying 20% (MUTE) when the device is in AUTO fan mode.
+- This stopped unintentional MUTE commands being sent when the user moved the fan speed slider while the device was in AUTO fan mode.
+- Added `parseDecryptedInfo` helper for clean 48-byte response parsing.
+
 ## v0.0.8-beta.16 - 2026-04-25
 
 ## Fix: SET commands ahora funcionan — CRC del payload AC era incorrecto
