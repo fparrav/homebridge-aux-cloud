@@ -8,7 +8,15 @@ import type { Logger } from 'homebridge';
 
 import { AuxCloudClient, type AuxDevice } from './AuxCloudClient';
 import type { DiscoveredDevice } from './broadlink/DeviceDiscovery';
-import { BroadlinkCommand, buildPacket, buildCommandPayload, decryptPayload, parseAuthResponse } from './broadlink/Protocol';
+import {
+  BroadlinkCommand,
+  buildPacket,
+  buildCommandPayload,
+  decryptPayload,
+  parseAuthResponse,
+  broadlinkWireToAuxMode,
+  broadlinkWireToAuxFanSpeed,
+} from './broadlink/Protocol';
 
 export interface DeviceMapping {
   endpointId?: string;
@@ -153,19 +161,24 @@ export class AuxDeviceControl {
     if (decrypted.length < 23) return null;
 
     if (decrypted.length >= 32) {
-      // 32-byte state response
+      // 32-byte state response — translate wire protocol values to AUX cloud API values
+      const wireMute      = (decrypted[16] >> 7) & 0x01;
+      const wireFanSpeed  = (decrypted[15] >> 5) & 0x07;
       return {
         pwr:       (decrypted[20] >> 5) & 0x01,
         temp:      (8 + (decrypted[12] >> 3)) * 10,
         ac_vdir:   decrypted[12] & 0x07,
-        ac_mode:   (decrypted[17] >> 5) & 0x0f,
+        // Translate wire mode (0=auto,1=cool,2=dry,4=heat,6=fan) → AuxAcModeValue
+        ac_mode:   broadlinkWireToAuxMode((decrypted[17] >> 5) & 0x0f),
         ac_slp:    (decrypted[17] >> 2) & 0x01,
         scrdisp:   (decrypted[22] >> 4) & 0x01,
         mldprf:    (decrypted[22] >> 3) & 0x01,
         ac_health: (decrypted[20] >> 1) & 0x01,
         ac_hdir:   decrypted[12] & 0x07,
-        ac_mark:   (decrypted[15] >> 5) & 0x07,
-        mute:      (decrypted[16] >> 7) & 0x01,
+        // Translate wire fan speed (1=high,2=med,3=low,4=turbo,5=auto) → AuxFanSpeed.
+        // When mute bit is set, override with AuxFanSpeed.MUTE(5).
+        ac_mark:   wireMute ? 5 : broadlinkWireToAuxFanSpeed(wireFanSpeed),
+        mute:      wireMute,
         turbo:     (decrypted[16] >> 6) & 0x01,
         ac_clean:  (decrypted[20] >> 2) & 0x01,
       };

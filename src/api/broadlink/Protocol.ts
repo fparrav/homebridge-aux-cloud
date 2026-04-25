@@ -29,21 +29,105 @@ export enum BroadlinkPower {
   On = 1,
 }
 
+/**
+ * Broadlink wire protocol mode values (byte 15 in command, byte 17 in response).
+ * These differ from AUX cloud API mode values (AuxAcModeValue in constants.ts).
+ *
+ * Reference: broadlink-aircon-api Mode enum.
+ */
 export enum BroadlinkMode {
-  Cooling = 0,
-  Heating = 1,
+  Auto = 0,
+  Cooling = 1,
   Dry = 2,
-  Fan = 3,
-  Auto = 4,
+  Heating = 4,
+  Fan = 6,
 }
 
+/**
+ * Broadlink wire protocol fan speed values (byte 13 in command, byte 15 in response).
+ * These differ from AUX cloud API fan speed values (AuxFanSpeed in constants.ts).
+ *
+ * Reference: broadlink-aircon-api Fanspeed enum.
+ */
 export enum BroadlinkFanSpeed {
-  Auto = 0,
-  Low = 1,
+  High = 1,
   Medium = 2,
-  High = 3,
+  Low = 3,
   Turbo = 4,
-  Mute = 5,
+  Auto = 5,
+}
+
+/**
+ * AUX cloud API mode values (used in device.params and HomeKit mapping).
+ * Kept in sync with AuxAcModeValue in constants.ts — duplicated here to avoid
+ * circular imports between Protocol.ts and constants.ts.
+ */
+const AUX_MODE_TO_BROADLINK: Record<number, BroadlinkMode> = {
+  0: BroadlinkMode.Cooling,
+  1: BroadlinkMode.Heating,
+  2: BroadlinkMode.Dry,
+  3: BroadlinkMode.Fan,
+  4: BroadlinkMode.Auto,
+};
+
+const BROADLINK_MODE_TO_AUX: Record<number, number> = {
+  [BroadlinkMode.Auto]:    4, // AuxAcModeValue.AUTO
+  [BroadlinkMode.Cooling]: 0, // AuxAcModeValue.COOLING
+  [BroadlinkMode.Dry]:     2, // AuxAcModeValue.DRY
+  [BroadlinkMode.Heating]: 1, // AuxAcModeValue.HEATING
+  [BroadlinkMode.Fan]:     3, // AuxAcModeValue.FAN
+};
+
+/**
+ * AUX cloud fan speed values → Broadlink wire fan speed values.
+ * Wire values: high=1, medium=2, low=3, turbo=4, auto=5.
+ * Mute is handled via a separate bit (mute flag) not via fanspeed byte.
+ */
+const AUX_FANSPEED_TO_BROADLINK: Record<number, number> = {
+  0: BroadlinkFanSpeed.Auto,   // AuxFanSpeed.AUTO
+  1: BroadlinkFanSpeed.Low,    // AuxFanSpeed.LOW
+  2: BroadlinkFanSpeed.Medium, // AuxFanSpeed.MEDIUM
+  3: BroadlinkFanSpeed.High,   // AuxFanSpeed.HIGH
+  4: BroadlinkFanSpeed.Turbo,  // AuxFanSpeed.TURBO
+  5: BroadlinkFanSpeed.Auto,   // AuxFanSpeed.MUTE — mute bit handled separately
+};
+
+const BROADLINK_FANSPEED_TO_AUX: Record<number, number> = {
+  [BroadlinkFanSpeed.High]:   3, // AuxFanSpeed.HIGH
+  [BroadlinkFanSpeed.Medium]: 2, // AuxFanSpeed.MEDIUM
+  [BroadlinkFanSpeed.Low]:    1, // AuxFanSpeed.LOW
+  [BroadlinkFanSpeed.Turbo]:  4, // AuxFanSpeed.TURBO
+  [BroadlinkFanSpeed.Auto]:   0, // AuxFanSpeed.AUTO
+};
+
+/**
+ * Translate an AUX cloud API mode value to the Broadlink wire protocol mode value.
+ */
+export function auxModeToBroadlinkWire(auxMode: number): number {
+  return AUX_MODE_TO_BROADLINK[auxMode] ?? BroadlinkMode.Auto;
+}
+
+/**
+ * Translate a Broadlink wire protocol mode value to an AUX cloud API mode value.
+ */
+export function broadlinkWireToAuxMode(wireMode: number): number {
+  return BROADLINK_MODE_TO_AUX[wireMode] ?? 4; // default AUTO
+}
+
+/**
+ * Translate an AUX cloud API fan speed value to the Broadlink wire fan speed value.
+ * Note: MUTE (AuxFanSpeed=5) maps to Auto wire value; the mute bit is set separately.
+ */
+export function auxFanSpeedToBroadlinkWire(auxFanSpeed: number): number {
+  return AUX_FANSPEED_TO_BROADLINK[auxFanSpeed] ?? BroadlinkFanSpeed.Auto;
+}
+
+/**
+ * Translate a Broadlink wire fan speed value to an AUX cloud API fan speed value.
+ * Note: When mute bit is set, caller should override result with AuxFanSpeed.MUTE(5).
+ */
+export function broadlinkWireToAuxFanSpeed(wireFanSpeed: number): number {
+  return BROADLINK_FANSPEED_TO_AUX[wireFanSpeed] ?? 0; // default AUTO
 }
 
 export interface BroadlinkAState {
@@ -203,12 +287,17 @@ export function buildCommandPayload(
 ): Buffer {
   const power = params['pwr'] ?? 0;
   const temp = params['temp'] ?? 24;
-  const mode = params['ac_mode'] ?? 0;
-  const fanspeed = params['ac_mark'] ?? 0;
+  // Translate AUX cloud mode → Broadlink wire mode
+  const mode = auxModeToBroadlinkWire(params['ac_mode'] ?? 4); // default AUTO
+  // Translate AUX cloud fan speed → Broadlink wire fan speed
+  const auxFan = params['ac_mark'] ?? 0;
+  const isMute = auxFan === 5; // AuxFanSpeed.MUTE
+  const fanspeed = auxFanSpeedToBroadlinkWire(auxFan);
   const verticalFixation = params['ac_vdir'] ?? 0;
   const horizontalFixation = params['ac_hdir'] ?? 0;
   const turbo = params['turbo'] ?? 0;
-  const mute = params['mute'] ?? 0;
+  // isMute: either ac_mark=MUTE (5) or explicit mute param
+  const mute = (isMute || (params['mute'] ?? 0)) ? 1 : 0;
   const health = params['ac_health'] ?? 0;
   const clean = params['ac_clean'] ?? 0;
   const display = params['scrdisp'] ?? 0;
