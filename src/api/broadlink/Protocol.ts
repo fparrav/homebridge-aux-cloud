@@ -71,7 +71,7 @@ const HEADER_MAGIC = Buffer.from([
 
 /**
  * Calculate 16-bit checksum (byte sum starting from 0xbeaf, wrapped to 16 bits).
- * This is what the device firmware expects for both inner payload and outer packet checksums.
+ * Used for Broadlink packet header checksums (inner at 0x34-0x35, outer at 0x20-0x21).
  */
 export function calculateChecksum(data: Buffer): number {
   let sum = 0xbeaf;
@@ -79,6 +79,21 @@ export function calculateChecksum(data: Buffer): number {
     sum = (sum + data[i]) & 0xffff;
   }
   return sum;
+}
+
+/**
+ * Internet checksum (16-bit ones complement sum) used for the AC command payload CRC.
+ * Different from calculateChecksum — matches broadlink-aircon-api reference.
+ */
+function commandPayloadChecksum(data: Buffer): number {
+  let sum = 0;
+  for (let i = 0; i < data.length; i += 2) {
+    sum += ((data[i] << 8) & 0xff00) + (data[i + 1] & 0xff);
+  }
+  while (sum >> 16) {
+    sum = (sum & 0xffff) + (sum >> 16);
+  }
+  return 0xffff ^ sum;
 }
 
 /**
@@ -244,9 +259,9 @@ export function buildCommandPayload(
   requestPayload[0] = length + 2;
   payload.copy(requestPayload, 2);
 
-  const checksum = calculateChecksum(payload);
-  requestPayload[length + 2] = (checksum >> 8) & 0xff;
-  requestPayload[length + 3] = checksum & 0xff;
+  const crc = commandPayloadChecksum(payload);
+  requestPayload[length + 2] = (crc >> 8) & 0xff;
+  requestPayload[length + 3] = crc & 0xff;
 
   return requestPayload;
 }
