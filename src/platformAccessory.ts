@@ -783,29 +783,6 @@ export class AuxCloudPlatformAccessory {
     return this.device.params[definition.param] === 1;
   }
 
-  private async applyFanLevel(level: FanSpeedLevel): Promise<void> {
-    if (!this.device) {
-      return;
-    }
-
-    const payload: Record<string, number> = { [AC_FAN_SPEED]: level.aux };
-    if (this.supportsComfortableWind) {
-      payload[AC_COMFORTABLE_WIND] = level.comfortableWind ? 1 : 0;
-    }
-
-    await this.platform.sendDeviceParamsWithRetry(this.device, payload);
-
-    this.device.params = this.device.params ?? {};
-    this.device.params[AC_FAN_SPEED] = level.aux;
-    if (this.supportsComfortableWind) {
-      this.device.params[AC_COMFORTABLE_WIND] = level.comfortableWind ? 1 : 0;
-    }
-
-    if (!level.comfortableWind && level.aux !== AuxFanSpeed.AUTO) {
-      this.lastManualFanSpeed = level.aux;
-    }
-  }
-
   // ------------------------------------------------------------------
   // Internal helpers
   // ------------------------------------------------------------------
@@ -890,7 +867,7 @@ export class AuxCloudPlatformAccessory {
     const shouldPowerOn = ensurePowerOn && !this.isDevicePowered();
     if (shouldPowerOn) {
       try {
-        await this.platform.sendDeviceParams(this.device, AC_POWER_ON);
+        await this.platform.sendDeviceParamsWithRetry(this.device, AC_POWER_ON);
 
         this.device.params = this.device.params ?? {};
         this.device.params[AC_POWER] = 1;
@@ -911,7 +888,7 @@ export class AuxCloudPlatformAccessory {
       payload[AC_MODE_SPECIAL] = auxMode;
     }
     try {
-      await this.platform.sendDeviceParams(this.device, payload);
+      await this.platform.sendDeviceParamsWithRetry(this.device, payload);
     } catch (error) {
       this.pendingAuxMode = undefined;
       throw error;
@@ -935,7 +912,7 @@ export class AuxCloudPlatformAccessory {
       }
 
       try {
-        await this.platform.sendDeviceParams(this.device, payload);
+        await this.platform.sendDeviceParamsWithRetry(this.device, payload);
       } catch (error) {
         this.handleCommandError('retry set mode', error);
       }

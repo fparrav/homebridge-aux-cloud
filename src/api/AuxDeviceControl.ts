@@ -444,7 +444,7 @@ export class AuxDeviceControl {
         this.logger?.debug('[LAN] Decrypted state payload too short (%d bytes) for %s', stateDecrypted.length, ip);
         return null;
         }
-      this.logger?.warn('[LAN] State OK for %s (%d bytes): pwr=%d temp=%d', ip, stateDecrypted.length, params.pwr, params.temp);
+      this.logger?.warn('[LAN] State OK for %s (%d bytes): pwr=%d temp=%d mode=%d fan=%d', ip, stateDecrypted.length, params.pwr, params.temp, params.ac_mode, params.ac_mark);
 
       // --- getInfo (ambient temperature) ---
       const infoPacket = buildPacket(infoPayload, BroadlinkCommand.Packet, macBuf, session.id, session.count++, session.key);
