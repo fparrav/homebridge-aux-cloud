@@ -1,5 +1,17 @@
 # Changelog
 
+## v0.0.8-beta.14 - 2026-04-25
+
+Fix outer checksum algorithm (big-endian word sum with carry fold) and add LAN session retry with re-auth on failure.
+
+## Changes
+- **Critical**: Outer checksum in `buildPacket` was using `packet[i]` (even-indexed bytes only) instead of big-endian word sum `((packet[i] << 8) + packet[i+1])` with carry fold and ones complement
+  - Packets were sent with checksum 0x0000 — devices silently discarded all commands
+- Remove periodic re-auth (`scheduleReauth`): devices drop idle sessions, keep-alive is naturally maintained by state polling
+- Add `LAN_RECONNECT_RETRY` (2 retries) with re-auth on failure in `sendLocalCommand` and `pollLocalState`
+- Socket send now uses callback with error handling — marks session as unauthenticated on error
+- Remove inner payload checksum (not used by device, only outer matters)
+
 ## v0.0.7-beta.13 — Fix checksum Broadlink (big-endian word sum) - 2026-04-24
 
 **Full Changelog**: https://github.com/fparrav/homebridge-aux-cloud/compare/v0.0.7-beta.12...v0.0.7-beta.13
