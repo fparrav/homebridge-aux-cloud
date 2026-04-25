@@ -70,17 +70,15 @@ const HEADER_MAGIC = Buffer.from([
 ]);
 
 /**
- * Calculate 16-bit checksum (big-endian word sum, wrap around, XOR with 0xffff).
+ * Calculate 16-bit checksum (byte sum starting from 0xbeaf, wrapped to 16 bits).
+ * This is what the device firmware expects for both inner payload and outer packet checksums.
  */
 export function calculateChecksum(data: Buffer): number {
-  let sum = 0;
-  for (let i = 0; i < data.length; i += 2) {
-    sum = (sum + ((data[i] << 8) + data[i + 1])) & 0xffff;
+  let sum = 0xbeaf;
+  for (let i = 0; i < data.length; i++) {
+    sum = (sum + data[i]) & 0xffff;
   }
-  while (sum >> 16) {
-    sum = ((sum & 0xffff) + (sum >> 16)) & 0xffff;
-  }
-  return 0xffff ^ sum;
+  return sum;
 }
 
 /**
@@ -162,25 +160,19 @@ export function buildPacket(
   // Device ID
   id.copy(header, 0x30, 0, 4);
 
-  // Encrypt payload with AES-128-CBC (no auto padding)
+  // Inner checksum of plaintext payload (stored before encryption, at 0x34-0x35)
+  const innerChk = calculateChecksum(payload);
+  header[0x34] = innerChk & 0xff;
+  header[0x35] = (innerChk >> 8) & 0xff;
+
+  // Encrypt payload with AES-128-CBC (cipher.update only — avoids unwanted PKCS#7 padding block)
   const cipher = createCipheriv('aes-128-cbc', key, DEFAULT_IV);
-  cipher.setAutoPadding(false);
   const encryptedPayload = cipher.update(payload);
-  const encryptedFinal = cipher.final();
-  const encrypted = encryptedFinal.length > 0
-    ? Buffer.concat([encryptedPayload, encryptedFinal])
-    : encryptedPayload;
 
-  const packet = Buffer.concat([header, encrypted]);
+  const packet = Buffer.concat([header, encryptedPayload]);
 
-  // Outer checksum over the entire packet (big-endian word sum, ones complement)
-  let outerChk = 0xbeaf;
-  for (let i = 0; i < packet.length; i += 2) {
-    outerChk = (outerChk + ((packet[i] << 8) + packet[i + 1])) & 0xffff;
-  }
-  while (outerChk >> 16) {
-    outerChk = ((outerChk & 0xffff) + (outerChk >> 16)) & 0xffff;
-  }
+  // Outer checksum over the entire packet (byte sum from 0xbeaf, little-endian)
+  const outerChk = calculateChecksum(packet);
   packet[0x20] = outerChk & 0xff;
   packet[0x21] = (outerChk >> 8) & 0xff;
 
