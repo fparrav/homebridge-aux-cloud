@@ -1,5 +1,22 @@
 # Changelog
 
+## v0.0.8-beta.16 - 2026-04-25
+
+## Fix: SET commands ahora funcionan — CRC del payload AC era incorrecto
+
+El protocolo usa **dos algoritmos de checksum distintos**:
+- Checksums de cabecera Broadlink (`0x20` y `0x34`): byte-sum desde `0xbeaf` — correcto desde beta.15
+- **CRC del payload AC** (`request_payload[length+2, length+3]`): Internet checksum (16-bit ones complement) — **era incorrecto, corregido en esta versión**
+
+El GET state funcionaba porque sus magic bytes tienen el CRC precomputado correcto hardcodeado. Los comandos SET fallaban silenciosamente porque el CRC se calculaba dinámicamente con el algoritmo incorrecto.
+
+### Verificado manualmente
+- Martin (192.168.20.180): `pwr=1` ✅ tras SET command
+- Sala (192.168.20.155): `pwr=1` ✅ tras SET command
+
+### También incluye
+- `src/test-lan.ts`: script standalone de prueba de comunicación LAN (auth → SET → GET → assert)
+
 ## v0.0.8-beta.15 - 2026-04-25
 
 ## Fix: tres regresiones en el protocolo Broadlink LAN
