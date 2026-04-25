@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.0.8-beta.21 - 2026-04-25
+
+## Fixes
+
+- **Parallel LAN polling**: all devices polled concurrently (Promise.all) instead of sequentially; one unreachable device no longer blocks others
+- **Reduced timeouts**: auth 5s→3s, state poll 5s→3s, getInfo 3s→1.5s; total worst-case overhead per cycle: ~10s instead of ~23s
+- Net effect: effective refresh latency ~33s at 30s interval (was ~80s)
+
 ## v0.0.8-beta.20 - 2026-04-25
 
 ## Fixes
