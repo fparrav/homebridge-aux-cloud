@@ -269,7 +269,7 @@ export class AuxDeviceControl {
    */
   private async doSessionAuth(session: LanSession, ip: string, macBuf: Buffer): Promise<void> {
     const authMsg = await new Promise<Buffer | null>((resolve) => {
-      const timeout = setTimeout(() => resolve(null), 5000);
+      const timeout = setTimeout(() => resolve(null), 3000);
       session.authResolver = (msg) => { clearTimeout(timeout); resolve(msg); };
       const authPayload = this.buildAuthPayload();
       const authPacket = buildPacket(authPayload, BroadlinkCommand.Auth, macBuf, Buffer.alloc(4, 0), session.count++);
@@ -440,7 +440,7 @@ export class AuxDeviceControl {
       // --- getState ---
       const statePacket = buildPacket(statePayload, BroadlinkCommand.Packet, macBuf, session.id, session.count++, session.key);
       const stateResponse = await new Promise<Buffer | null>((resolve) => {
-        const timeout = setTimeout(() => resolve(null), 5000);
+        const timeout = setTimeout(() => resolve(null), 3000);
         session.stateResolvers.push((msg) => { clearTimeout(timeout); resolve(msg); });
         session.socket.send(statePacket, 0, statePacket.length, 80, ip);
         });

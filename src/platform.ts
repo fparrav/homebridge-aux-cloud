@@ -427,11 +427,12 @@ private getLanOnlyDevices(): AuxDevice[] {
       const allDevices = [...cloudDevices, ...lanOnlyDevices];
 
       if (this.config.localControlEnabled) {
-        for (const device of allDevices) {
+        // Poll all devices in parallel — eliminates serial wait on auth timeouts
+        await Promise.all(allDevices.map(async (device) => {
           const mac = device.mac;
-          if (!mac) continue;
+          if (!mac) return;
           const mapping = this.deviceControl.getDeviceMapping(mac);
-          if (!mapping) continue;
+          if (!mapping) return;
           try {
             const localParams = await this.deviceControl.pollLocalState(mapping.ip, mapping.mac);
             if (localParams != null) {
@@ -443,7 +444,7 @@ private getLanOnlyDevices(): AuxDevice[] {
             this.deviceControl.recordFailure(device.endpointId);
             this.log.warn('[LAN] Poll failed for %s', device.endpointId)
           }
-        }
+        }));
       }
 
       if (allDevices.length > 0) {
