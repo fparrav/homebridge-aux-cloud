@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.0.8-beta.22 - 2026-04-25
+
+fix: remove unused refreshTimer declaration (TypeScript warning cleanup)
+
 ## v0.0.8-beta.21 - 2026-04-25
 
 ## Fixes
