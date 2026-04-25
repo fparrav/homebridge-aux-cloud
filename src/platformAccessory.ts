@@ -641,6 +641,12 @@ export class AuxCloudPlatformAccessory {
       return levels[0]?.percent ?? 0;
     }
 
+    // AUTO fan speed is managed via the dedicated Auto Fan switch; return the minimum
+    // slider value so HomeKit does not misrepresent AUTO as a specific manual speed.
+    if (raw === AuxFanSpeed.AUTO) {
+      return levels[0]?.percent ?? 0;
+    }
+
     const level = levels.find((candidate) => candidate.aux === raw);
     return level?.percent ?? levels[0]?.percent ?? 0;
   }

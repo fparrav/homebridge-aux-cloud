@@ -8,7 +8,7 @@ import type { Logger } from 'homebridge';
 
 import { AuxCloudClient, type AuxDevice } from './AuxCloudClient';
 import type { DiscoveredDevice } from './broadlink/DeviceDiscovery';
-import { BroadlinkCommand, buildCommandPayload, buildPacket, decryptPayload, parseAuthResponse } from './broadlink/Protocol';
+import { BroadlinkCommand, buildPacket, buildCommandPayload, decryptPayload, parseAuthResponse } from './broadlink/Protocol';
 
 export interface DeviceMapping {
   endpointId?: string;
@@ -147,24 +147,46 @@ export class AuxDeviceControl {
 
   /**
    * Parse decrypted LAN response into params map.
+   * Handles both 32-byte state responses and 48-byte info responses.
    */
   private parseDecryptedState(decrypted: Buffer): Record<string, number> | null {
     if (decrypted.length < 23) return null;
-    return {
-      pwr:          (decrypted[20] >> 5) & 0x01,
-      temp:         (8 + (decrypted[12] >> 3)) * 10,
-      ac_vdir:   decrypted[12] & 0x07,
-      ac_mode:      (decrypted[17] >> 5) & 0x0f,
-      ac_slp:       (decrypted[17] >> 2) & 0x01,
-      scrdisp:      (decrypted[22] >> 4) & 0x01,
-      mldprf:       (decrypted[22] >> 3) & 0x01,
-      ac_health: (decrypted[20] >> 1) & 0x01,
-      ac_hdir:   decrypted[12] & 0x07,
-      ac_mark:      (decrypted[15] >> 5) & 0x07,
-      mute:         (decrypted[16] >> 7) & 0x01,
-      turbo:        (decrypted[16] >> 6) & 0x01,
-      ac_clean:     (decrypted[20] >> 2) & 0x01,
-    };
+
+    if (decrypted.length >= 32) {
+      // 32-byte state response
+      return {
+        pwr:       (decrypted[20] >> 5) & 0x01,
+        temp:      (8 + (decrypted[12] >> 3)) * 10,
+        ac_vdir:   decrypted[12] & 0x07,
+        ac_mode:   (decrypted[17] >> 5) & 0x0f,
+        ac_slp:    (decrypted[17] >> 2) & 0x01,
+        scrdisp:   (decrypted[22] >> 4) & 0x01,
+        mldprf:    (decrypted[22] >> 3) & 0x01,
+        ac_health: (decrypted[20] >> 1) & 0x01,
+        ac_hdir:   decrypted[12] & 0x07,
+        ac_mark:   (decrypted[15] >> 5) & 0x07,
+        mute:      (decrypted[16] >> 7) & 0x01,
+        turbo:     (decrypted[16] >> 6) & 0x01,
+        ac_clean:  (decrypted[20] >> 2) & 0x01,
+      };
+    }
+
+    return null;
+  }
+
+  /**
+   * Parse 48-byte getInfo response into ambient temperature param.
+   */
+  private parseDecryptedInfo(decrypted: Buffer): Record<string, number> | null {
+    if (decrypted.length < 48) return null;
+    // Ambient temperature: fractional part from byte 33, integer part from byte 17
+    const amb05 = decrypted[33] / 10;
+    let amb = decrypted[17] & 0x1f;
+    if (decrypted[17] > 63) {
+      amb += 32;
+    }
+    const ambientTemp = Math.round((amb05 + amb) * 10); // store as ×10 like other temp params
+    return { envtemp: ambientTemp };
   }
 
   private createLanSocket(): ReturnType<typeof createSocket> {
@@ -379,12 +401,14 @@ export class AuxDeviceControl {
 
     /**
      * Polls device state via LAN UDP with persistent session y retry.
-     * Returns params map or null on failure.
+     * Sends getState (32-byte response) then getInfo (48-byte response for ambient temp).
+     * Returns merged params map or null on failure.
      * El polling periódico mantiene el keep-alive de la sesión.
      */
   async pollLocalState(ip: string, mac: string): Promise<Record<string, number> | null> {
     const macBuf = Buffer.from(mac.split(':').map((b) => parseInt(b, 16)));
     const statePayload = Buffer.from('0C00BB0006800000020011012B7E0000', 'hex');
+    const infoPayload  = Buffer.from('0C00BB0006800000020021011B7E0000', 'hex');
 
      // Retry with re-auth on failure (session may be dropped by device)
     for (let attempt = 0; attempt <= LAN_RECONNECT_RETRY; attempt++) {
@@ -400,6 +424,7 @@ export class AuxDeviceControl {
         continue;
         }
 
+      // --- getState ---
       const statePacket = buildPacket(statePayload, BroadlinkCommand.Packet, macBuf, session.id, session.count++, session.key);
       const stateResponse = await new Promise<Buffer | null>((resolve) => {
         const timeout = setTimeout(() => resolve(null), 5000);
@@ -413,13 +438,33 @@ export class AuxDeviceControl {
         continue;
         }
 
-      const decrypted = decryptPayload(stateResponse, session.key);
-      const params = this.parseDecryptedState(decrypted);
+      const stateDecrypted = decryptPayload(stateResponse, session.key);
+      const params = this.parseDecryptedState(stateDecrypted);
       if (params === null) {
-        this.logger?.debug('[LAN] Decrypted payload too short (%d bytes) for %s', decrypted.length, ip);
+        this.logger?.debug('[LAN] Decrypted state payload too short (%d bytes) for %s', stateDecrypted.length, ip);
         return null;
         }
-      this.logger?.warn('[LAN] State OK for %s (%d bytes): pwr=%d temp=%d', ip, decrypted.length, params.pwr, params.temp);
+      this.logger?.warn('[LAN] State OK for %s (%d bytes): pwr=%d temp=%d', ip, stateDecrypted.length, params.pwr, params.temp);
+
+      // --- getInfo (ambient temperature) ---
+      const infoPacket = buildPacket(infoPayload, BroadlinkCommand.Packet, macBuf, session.id, session.count++, session.key);
+      const infoResponse = await new Promise<Buffer | null>((resolve) => {
+        const timeout = setTimeout(() => resolve(null), 3000);
+        session.stateResolvers.push((msg) => { clearTimeout(timeout); resolve(msg); });
+        session.socket.send(infoPacket, 0, infoPacket.length, 80, ip);
+        });
+
+      if (infoResponse !== null) {
+        const infoDecrypted = decryptPayload(infoResponse, session.key);
+        const infoParams = this.parseDecryptedInfo(infoDecrypted);
+        if (infoParams !== null) {
+          this.logger?.debug('[LAN] Ambient temp for %s: %d (×10)', ip, infoParams.envtemp);
+          Object.assign(params, infoParams);
+        }
+      } else {
+        this.logger?.debug('[LAN] getInfo timeout for %s — ambient temp unavailable', ip);
+      }
+
       return params;
       }
     return null;
