@@ -99,8 +99,6 @@ export class AuxCloudPlatform implements DynamicPlatformPlugin {
      { sequence: number; timestamp: number; expectedState: number }
    >();
 
-  private refreshTimer?: NodeJS.Timeout;
-
   private isSyncing = false;
 
   // Cache last known cloud devices for resilience when cloud is unreachable
@@ -379,7 +377,7 @@ private getLanOnlyDevices(): AuxDevice[] {
       await this.refreshDevices();
 
       const intervalSeconds = this.validatePollInterval(this.config.pollInterval);
-      this.refreshTimer = setInterval(() => {
+      setInterval(() => {
         void this.refreshDevices();
          }, intervalSeconds * 1000);
         }
