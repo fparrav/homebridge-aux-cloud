@@ -6,9 +6,7 @@
         "title": "AUX Cloud Platform",
         "type": "object",
         "required": [
-            "name",
-            "username",
-            "password"
+            "name"
         ],
         "properties": {
             "name": {
@@ -19,11 +17,12 @@
             "username": {
                 "title": "AUX Cloud Username",
                 "type": "string",
-                "description": "Email address or phone number registered with AUX Cloud."
+                "description": "Email address or phone number registered with AUX Cloud. Not required for LAN-only mode."
             },
             "password": {
                 "title": "AUX Cloud Password",
-                "type": "string"
+                "type": "string",
+                "description": "Not required for LAN-only mode."
             },
             "region": {
                 "title": "Region",

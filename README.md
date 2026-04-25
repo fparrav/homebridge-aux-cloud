@@ -5,70 +5,72 @@
 
 # Homebridge AUX Cloud Platform
 
-Homebridge platform plugin that brings AUX Cloud-connected appliances (air conditioners, heat pumps, domestic hot water) into Apple HomeKit.  
-This project is a TypeScript port of the excellent Home Assistant integration [maeek/ha-aux-cloud](https://github.com/maeek/ha-aux-cloud) (v1.0.6) – huge thanks to Maeek & contributors for their protocol research and open-source work.
+Homebridge platform plugin that brings AUX air conditioners and heat pumps into Apple HomeKit.
+
+Supports **three control modes** — an AUX Cloud account is optional:
+
+| Mode | Requires cloud account | How commands are sent |
+|------|----------------------|----------------------|
+| **LAN-only** | No | Direct UDP to device over local network |
+| **Cloud-only** | Yes | AUX Cloud API (same as AC Freedom app) |
+| **Cloud + LAN** | Yes | LAN first, cloud as fallback |
+
+This project is a TypeScript port of [maeek/ha-aux-cloud](https://github.com/maeek/ha-aux-cloud) — huge thanks to Maeek & contributors.
+
+---
 
 ## Installation
-
-The plugin is published on npm as [`homebridge-aux-cloud`](https://www.npmjs.com/package/homebridge-aux-cloud).
 
 > **Requirements:** Node.js 20.x or 22.x (LTS) and Homebridge 1.7.0 or newer.
 
 ```bash
-# Install (or update) globally for Homebridge
 sudo npm install -g homebridge-aux-cloud
-
-# Smart-home beta builds are published with the "beta" dist-tag
-# sudo npm install -g homebridge-aux-cloud@beta
 ```
 
-After installing, open Homebridge Config UI X → Plugins → `AuxCloudPlatform` and fill in your AUX Cloud credentials. Both email addresses and phone numbers are supported as usernames.
+Beta builds:
+```bash
+sudo npm install -g homebridge-aux-cloud@beta
+```
 
-### Example `config.json`
+---
+
+## Configuration
+
+### Mode 1 — LAN-only (no AUX Cloud account required)
+
+Use this mode if your ACs are on your local network and you either don't have an AUX Cloud account or prefer to keep the devices off the internet (e.g., to prevent unwanted firmware updates).
+
+Each device needs its **MAC address** and a **display name**. If the device isn't found via UDP broadcast, add its IP.
 
 ```jsonc
 {
   "platform": "AuxCloudPlatform",
   "name": "Aux Cloud",
-  "username": "+34111222333",
-  "password": "super-secret-password",
-  "region": "eu",
-  "temperatureUnit": "C",
-  "temperatureStep": 0.5,
-  "featureSwitches": [
-    "screenDisplay",
-    "mildewProof"
-  ],
-  "pollInterval": 60,
-  "includeDeviceIds": [],
-  "excludeDeviceIds": []
+  "localControlEnabled": true,
+  "devices": [
+    {
+      "mac": "c8:f7:42:9c:9c:cc",
+      "name": "Living Room AC"
+    },
+    {
+      "mac": "ec:0b:ae:0b:c4:c8",
+      "name": "Bedroom AC",
+      "ip": "192.168.1.100"
+    }
+  ]
 }
 ```
 
-- `region` – one of `eu`, `usa`, or `cn`. Defaults to `eu`.
-- `temperatureUnit` – display setpoints and ambient temperature in `C` (default) or `F`. Values are converted before hitting AUX Cloud.
-- `temperatureStep` – choose `0.5` for the classic AC Freedom 0.5 °C increments or `1` for whole degrees. In Fahrenheit mode the plugin enforces 1 °F steps.
-- `featureSwitches` – optional array of AUX features to expose as HomeKit switches. Supported values: `screenDisplay`, `mildewProof`, `clean`, `health`, `eco`, `sleep`.
-- `pollInterval` – refresh cadence in seconds (30 – 600, default 60). The plugin also cheerfully refreshes right after issuing commands.
-- `includeDeviceIds` – optional list of AUX endpoint IDs to expose. Leave empty to include everything.
-- `excludeDeviceIds` – optional list to hide specific devices (handy if you only want HVAC and not the accompanying water heater, for example).
+- No `username` or `password` needed.
+- Commands go directly over UDP — no internet required.
+- State is polled locally every `pollInterval` seconds (default 60).
+- If a device is unreachable the HomeKit command fails immediately (no cloud retry).
 
-### Local LAN Control
+---
 
-Starting with v0.0.7, this plugin supports local LAN control for Broadlink-based AUX devices (AC Freedom, etc.) with cloud fallback.
+### Mode 2 — Cloud-only
 
-- `controlStrategy` – how to route commands: `cloud-only` (default) or `local-first` (tries LAN, falls back to cloud after 3 consecutive failures).
-- `localControlEnabled` – when `true`, enables LAN discovery and local command routing. **Discovery is mandatory**: the plugin will fail to start if no Broadlink devices are found on the network.
-- `devices` – device list, indexed by **MAC address**. Supports two types of device:
-
-| Type | Required fields | Optional fields |
-|------|----------------|-----------------|
-| **LAN-only** (no AUX Cloud account) | `mac`, `name` | `ip`, `controlStrategy` |
-| **Cloud + LAN** (registered in AUX Cloud) | `mac`, `endpointId` | `ip`, `name`, `controlStrategy` |
-
-#### LAN-only devices (no internet, no AUX Cloud account)
-
-Devices intentionally kept off the internet (to prevent firmware updates that may break local control) can still be fully controlled via HomeKit. Configure them with `mac` + `name` only — no `endpointId` needed.
+Use this mode if your devices are registered in AUX Cloud and you don't need local control.
 
 ```jsonc
 {
@@ -76,103 +78,152 @@ Devices intentionally kept off the internet (to prevent firmware updates that ma
   "name": "Aux Cloud",
   "username": "your@email.com",
   "password": "your-password",
-  "region": "usa",
+  "region": "eu"
+}
+```
+
+All devices in your AUX Cloud account are discovered automatically — no `devices` list needed.
+
+---
+
+### Mode 3 — Cloud + LAN (local-first with cloud fallback)
+
+Use this mode to get the responsiveness of local control while retaining cloud as a backup. Requires both cloud credentials and the `devices` list for devices you want to control locally.
+
+```jsonc
+{
+  "platform": "AuxCloudPlatform",
+  "name": "Aux Cloud",
+  "username": "your@email.com",
+  "password": "your-password",
+  "region": "eu",
   "controlStrategy": "local-first",
   "localControlEnabled": true,
   "devices": [
     {
       "mac": "c8:f7:42:9c:9c:cc",
-      "name": "Aire Sala"
-    },
-    {
-      "mac": "ec:0b:ae:0b:c4:c8",
-      "name": "Aire Martin"
+      "name": "Living Room AC"
     },
     {
       "mac": "ec:0b:ae:a4:65:fb",
-      "ip": "192.168.30.170",
+      "ip": "192.168.1.101",
       "endpointId": "00000000000000000000ec0baea465fb"
     }
   ]
 }
 ```
 
-In this example, *Aire Sala* and *Aire Martin* are controlled 100% via LAN UDP — they never touch the AUX Cloud API. *Aire Dormitorio* is a cloud device with an optional static IP for faster local polling.
+- Devices **without** `endpointId` are LAN-only (cloud never attempted).
+- Devices **with** `endpointId` use LAN first and fall back to cloud after 3 failures.
+- Devices registered in AUX Cloud but **not in the `devices` list** are controlled via cloud only.
 
-**LAN-only rules:**
-- LAN-only devices always use `controlStrategy: "local"` — cloud fallback is never attempted.
-- If the device is unreachable, the HomeKit command fails immediately (no silent retry to cloud).
-- State is polled via UDP at every refresh interval.
+---
 
-#### Discovery and static IPs
+## Configuration Reference
 
-When `localControlEnabled` is `true`, the plugin broadcasts a UDP discovery packet at startup. Devices found via discovery don't need an `ip` field. If a device is not found (e.g. on a different VLAN or the broadcast is blocked), configure its IP explicitly.
+### Platform options
 
-Devices that fail discovery **and** have no `ip` configured will not be reachable — configure a static DHCP lease and add the `ip` field.
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `name` | string | `"Aux Cloud"` | Platform name shown in Homebridge |
+| `username` | string | — | AUX Cloud email or phone. **Not required for LAN-only mode.** |
+| `password` | string | — | AUX Cloud password. **Not required for LAN-only mode.** |
+| `region` | `eu` / `usa` / `cn` | `eu` | AUX Cloud region |
+| `controlStrategy` | `cloud-only` / `local-first` | `cloud-only` | Global command routing strategy |
+| `localControlEnabled` | boolean | `false` | Enable LAN control and UDP discovery |
+| `pollInterval` | integer (30–600) | `60` | State refresh cadence in seconds |
+| `temperatureUnit` | `C` / `F` | `C` | Display unit for setpoints and ambient temp |
+| `temperatureStep` | `0.5` / `1` | `0.5` | Setpoint increment (0.5 replicates AC Freedom) |
+| `featureSwitches` | array | `[]` | Extra HomeKit switches: `screenDisplay`, `mildewProof`, `clean`, `health`, `eco`, `sleep` |
+| `commandRetryCount` | integer (0–5) | `2` | Cloud command retry attempts |
+| `commandTimeoutMs` | integer (1000–15000) | `5000` | Cloud command timeout in ms |
+| `includeDeviceIds` | string[] | `[]` | Only expose these cloud endpoint IDs (empty = all) |
+| `excludeDeviceIds` | string[] | `[]` | Hide these cloud endpoint IDs |
+| `devices` | array | `[]` | LAN device list (see below) |
 
-When `localControlEnabled` is `true`, the plugin **requires** at least one Broadlink device to be discovered at startup. If none are found, initialization fails with an explicit error. Use static IPs or configure the IP field as a fallback.
+### Device options (inside `devices`)
 
-The configuration schema (`config.schema.json`) surfaces all options inside Homebridge Config UI X, with inline help text.
+| Option | Required | Description |
+|--------|----------|-------------|
+| `mac` | Yes | MAC address (`aa:bb:cc:dd:ee:ff`) |
+| `name` | For LAN-only | Display name shown in HomeKit |
+| `ip` | No | Static IP — use if discovery doesn't find the device |
+| `endpointId` | For cloud+LAN | AUX Cloud endpoint ID for this device |
+| `controlStrategy` | No | Override per device: `local` or `cloud` |
+
+---
+
+## LAN Control — How It Works
+
+Local control uses the **Broadlink UDP protocol** (used by AC Freedom-compatible devices). The plugin:
+
+1. **Authenticates** — sends an auth packet (command `0x65`) and receives a session key.
+2. **Polls state** — sends `getState` (32-byte response) and `getInfo` (48-byte response with ambient temperature) periodically.
+3. **Sends commands** — encrypts the AC state payload (AES-128-CBC) and sends it directly to the device via UDP port 80.
+
+**Notes:**
+- Devices must be reachable on UDP port 80. If they're on a VLAN or behind a firewall, add a static IP and ensure UDP is allowed.
+- Only one UDP session per device is allowed at a time. The plugin manages a persistent session per device.
+- `getInfo` (ambient temperature) is sent after every `getState` to keep `CurrentTemperature` updated in HomeKit.
+
+### Discovery and static IPs
+
+When `localControlEnabled: true`, the plugin broadcasts a UDP discovery packet at startup. Devices found via broadcast don't need the `ip` field. If a device is on a different subnet or broadcast is blocked, set `ip` explicitly and ensure `localControlEnabled: true`.
+
+---
 
 ## Features
 
 - Secure login using the same encrypted flow as the official AUX Cloud mobile app.
-- Automatic discovery of families and devices (owned + shared).
-- HomeKit `HeaterCooler` accessory for generic AUX air conditioners, with:
+- Automatic discovery of families and devices (owned + shared) when using cloud mode.
+- HomeKit `HeaterCooler` accessory for AUX air conditioners:
   - Power control (`Active`)
   - Mode selection (Auto / Heat / Cool)
-  - Ambient temperature, cooling/heating setpoints in °C or °F with configurable steps
-  - Fan speed mapped to a discrete slider (0 % comfortable wind, 20–100 % for mute → turbo, plus a dedicated Auto switch)
-  - Dedicated Dry Mode and Fan Mode switches that are mutually exclusive and fall back to Auto when off
-  - Optional switches for screen display, mildew proof, self-clean, health, eco, and sleep modes
-- Support for manual include/exclude lists, with automatic removal of offline devices from Homebridge.
-- Fast polling loop with back-off on errors.
-- Ready for incremental expansion (eco/comfort modes, screen toggles, heat pumps, WebSocket push updates).
+  - Ambient temperature and setpoints in °C or °F with configurable steps
+  - Fan speed slider with dedicated Auto switch
+  - Dry Mode and Fan Mode switches (mutually exclusive, fall back to Auto when off)
+  - Optional switches: screen display, mildew proof, self-clean, health, eco, sleep
+- LAN-only devices work with no internet and no AUX Cloud account.
+- Cloud + LAN hybrid mode with automatic fallback.
+- Fast local polling with configurable interval.
 
-> ⚠️ **Considerations**
->
-> - **Cloud-only or local-first control**: By default, all commands go through the AUX Cloud API. Starting with v0.0.7, you can enable local LAN control for Broadlink-based devices (AC Freedom) with `localControlEnabled: true`. Local commands fall back to cloud if the device is unreachable.
-> - When using LAN control, response times depend on your local network. Cloud fallback kicks in after 3 consecutive LAN failures.
-> - Only accounts on the public AUX Cloud deployment are supported. Regional/private deployments might use different hosts.
-> - The current release focuses on generic AUX AC units. Heat-pump specific services and extra switches (eco, mildew proof, display, etc.) are on the roadmap.
-> - The AUX Cloud service can occasionally throttle requests. Keep the poll interval ≥60 s if you have many devices.
+---
 
 ## Development
 
-This repo uses Yarn Berry (Corepack). After cloning:
-
 ```bash
-corepack enable           # once per workstation
-yarn install
-yarn lint
-yarn build
+npm install
+npm run build
+npm run lint
 ```
 
-- `yarn watch` – incremental build during local development.
-- `yarn npm publish --tag beta` – build + publish a beta release (ensure `yarn npm login` succeeds first).
-- `npm run build` / `npm run lint` remain available for convenience when running via npm scripts.
+- `npm run watch` — incremental build during development.
+- Compiled plugin is in `dist/`. Do not edit it directly.
 
-The compiled plugin lives in `dist/` and is shipped to npm alongside `config.schema.json`. Please avoid editing `dist/` manually – use the TypeScript sources under `src/`.
+### Testing LAN communication
 
-### Testing
+A standalone test script is included for verifying LAN connectivity before deploying:
 
-Formal unit tests are still being ported. For now:
+```bash
+# Build first
+npm run build
 
-1. Build: `yarn build`
-2. Link into a Homebridge dev instance or install from a `npm pack` tarball.
-3. Configure valid AUX Cloud credentials and verify:
-   - Devices auto-register after Homebridge restart.
-   - Power toggle and mode changes reflect on the actual unit.
-   - Temperatures update within the configured poll interval.
+# Test auth → SET pwr=1 → GET state → assert pwr=1
+node dist/test-lan.js <ip> <mac>
+# Example:
+node dist/test-lan.js 192.168.1.100 aa:bb:cc:dd:ee:ff
+```
 
-Contributions for unit tests (Vitest/Jest) and mock AUX endpoints are very welcome.
+This script requires homebridge to be stopped first (only one UDP session per device).
+
+---
 
 ## Acknowledgements
 
 - [maeek/ha-aux-cloud](https://github.com/maeek/ha-aux-cloud) – original Home Assistant integration that inspired this port.
-- [makleso6/homebridge-broadlink-heater-cooler](https://github.com/makleso6/homebridge-broadlink-heater-cooler) – Broadlink LAN API implementation used as reference for local control.
+- [makleso6/homebridge-broadlink-heater-cooler](https://github.com/makleso6/homebridge-broadlink-heater-cooler) – Broadlink LAN API reference implementation.
 - [maekpow](https://github.com/maekpow) – Broadlink protocol reverse engineering and packet captures.
 - The Homebridge community for the plugin template and documentation.
 - AUX users who provided packet captures and protocol hints in the HA forums/repo.
 
-If you publish derivative work, please retain the upstream attribution. Enjoy keeping your AUX kit in sync with HomeKit! 🙌
+If you publish derivative work, please retain the upstream attribution. Enjoy keeping your AUX kit in sync with HomeKit!
