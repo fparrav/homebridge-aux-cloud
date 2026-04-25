@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.0.8-beta.20 - 2026-04-25
+
+## Fixes
+
+- **Cloud regression fix**: add 300ms debounce on temperature set commands — HomeKit fires both HeatingThreshold and CoolingThreshold handlers for the same gesture, causing duplicate commands that could reset device state
+- **LAN poll faster**: default poll interval reduced from 60s to 30s (minimum floor lowered from 30s to 15s)
+- **getInfo timeout**: reduced from 3s to 1.5s for faster poll cycles
+
 ## v0.0.8-beta.19 - 2026-04-25
 
 ## Root Cause Fix: Broadlink Wire Protocol Mode/FanSpeed Translation (LAN only)
