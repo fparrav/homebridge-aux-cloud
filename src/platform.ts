@@ -385,8 +385,8 @@ private getLanOnlyDevices(): AuxDevice[] {
         }
 
   private validatePollInterval(interval?: number): number {
-    if (!interval || Number.isNaN(interval) || interval < 30) {
-      return 60;
+    if (!interval || Number.isNaN(interval) || interval < 15) {
+      return 30;
      }
     if (interval > 600) {
       return 600;

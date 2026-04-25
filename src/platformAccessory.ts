@@ -166,6 +166,10 @@ export class AuxCloudPlatformAccessory {
 
   private pendingAuxMode?: AuxAcModeValue;
 
+  private pendingTempTimeout?: NodeJS.Timeout;
+
+  private pendingTempScaled?: number;
+
   constructor(
     private readonly platform: AuxCloudPlatform,
     private readonly accessory: PlatformAccessory,
@@ -577,11 +581,25 @@ export class AuxCloudPlatformAccessory {
     // Aplicar estado optimista inmediatamente
     this.device.params = this.device.params ?? {};
     this.device.params[AC_TEMPERATURE_TARGET] = scaled;
+    this.pendingTempScaled = scaled;
     this.platform.updateCachedDevice(this.device);
     this.updateCharacteristicsFromDevice();
     this.setFaulted(false);
 
-    this.platform.startDeviceCommand(this.device, { [AC_TEMPERATURE_TARGET]: scaled });
+    // Debounce: HomeKit fires both HeatingThresholdTemperature and CoolingThresholdTemperature
+    // set handlers for the same change. Wait 300ms so only the last value is sent.
+    if (this.pendingTempTimeout) {
+      clearTimeout(this.pendingTempTimeout);
+    }
+    const device = this.device;
+    this.pendingTempTimeout = setTimeout(() => {
+      this.pendingTempTimeout = undefined;
+      const finalScaled = this.pendingTempScaled;
+      this.pendingTempScaled = undefined;
+      if (typeof finalScaled === 'number') {
+        this.platform.startDeviceCommand(device, { [AC_TEMPERATURE_TARGET]: finalScaled });
+      }
+    }, 300);
   }
 
   private handleTargetTemperatureGet(): CharacteristicValue {

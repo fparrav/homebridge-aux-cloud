@@ -462,7 +462,7 @@ export class AuxDeviceControl {
       // --- getInfo (ambient temperature) ---
       const infoPacket = buildPacket(infoPayload, BroadlinkCommand.Packet, macBuf, session.id, session.count++, session.key);
       const infoResponse = await new Promise<Buffer | null>((resolve) => {
-        const timeout = setTimeout(() => resolve(null), 3000);
+        const timeout = setTimeout(() => resolve(null), 1500);
         session.stateResolvers.push((msg) => { clearTimeout(timeout); resolve(msg); });
         session.socket.send(infoPacket, 0, infoPacket.length, 80, ip);
         });
