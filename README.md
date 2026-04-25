@@ -126,7 +126,7 @@ Use this mode to get the responsiveness of local control while retaining cloud a
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `name` | string | `"Aux Cloud"` | Platform name shown in Homebridge |
-| `username` | string | — | AUX Cloud email or phone. **Not required for LAN-only mode.** |
+| `username` | string | — | AUX Cloud **email address**. **Not required for LAN-only mode.** See note below about phone numbers. |
 | `password` | string | — | AUX Cloud password. **Not required for LAN-only mode.** |
 | `region` | `eu` / `usa` / `cn` | `eu` | AUX Cloud region |
 | `controlStrategy` | `cloud-only` / `local-first` | `cloud-only` | Global command routing strategy |
@@ -140,6 +140,8 @@ Use this mode to get the responsiveness of local control while retaining cloud a
 | `includeDeviceIds` | string[] | `[]` | Only expose these cloud endpoint IDs (empty = all) |
 | `excludeDeviceIds` | string[] | `[]` | Hide these cloud endpoint IDs |
 | `devices` | array | `[]` | LAN device list (see below) |
+
+> **Phone number login:** The AUX Cloud API requires an email address as username. If your account was created with a phone number, you must associate an email address first: open the **AC Freedom** app → Profile → Account Settings → add an email address. Then use that email as `username` in this plugin. See [issue #5](https://github.com/fparrav/homebridge-aux-cloud/issues/5).
 
 ### Device options (inside `devices`)
 
@@ -165,6 +167,8 @@ Local control uses the **Broadlink UDP protocol** (used by AC Freedom-compatible
 - Devices must be reachable on UDP port 80. If they're on a VLAN or behind a firewall, add a static IP and ensure UDP is allowed.
 - Only one UDP session per device is allowed at a time. The plugin manages a persistent session per device.
 - `getInfo` (ambient temperature) is sent after every `getState` to keep `CurrentTemperature` updated in HomeKit.
+
+> **⚠️ LAN control may not work on newer devices.** Local LAN control relies on the Broadlink UDP protocol, which may conflict with newer firmware versions. Some newer AC units have updated firmware that blocks or ignores local UDP commands. If your device does not respond to HomeKit commands, try switching to `cloud-only` mode or check for a firmware update in the AC Freedom app. See [makleso6/homebridge-broadlink-heater-cooler](https://github.com/makleso6/homebridge-broadlink-heater-cooler) for more details on this limitation.
 
 ### Discovery and static IPs
 
