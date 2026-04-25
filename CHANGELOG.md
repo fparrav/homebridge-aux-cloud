@@ -1,5 +1,19 @@
 # Changelog
 
+## v0.0.8-beta.18 - 2026-04-25
+
+## Fixes
+
+### TypeScript cleanup
+- Removed unused `applyFanLevel` private method (was causing TS unused-variable warning)
+- Replaced all deprecated `sendDeviceParams()` calls with `sendDeviceParamsWithRetry()` in `setAuxMode` path
+
+### Diagnostic logging (LAN)
+- `State OK` log line now includes `mode=X fan=X` to expose raw `ac_mode` and `ac_mark` wire values returned by the device — needed to diagnose mode display bug when physical remote is used
+
+### No behaviour changes to cloud path
+All changes are scoped to the LAN code path; cloud control is unchanged.
+
 ## v0.0.8-beta.17 - 2026-04-25
 
 ## Fixes
