@@ -1,5 +1,27 @@
 # Changelog
 
+## v0.0.8 - 2026-04-25
+
+**Stable release** — LAN and cloud control fully validated in production.
+
+This version graduates `0.0.8-beta.x` to a stable release after 22 beta iterations confirming reliability across all three control modes: LAN-only, cloud-only, and cloud+LAN hybrid.
+
+### Highlights
+
+- **LAN-only support**: Control AUX ACs directly over UDP without an AUX Cloud account. Ideal for units kept off the internet to prevent firmware updates that break local control.
+- **Cloud + LAN hybrid (local-first)**: Commands go via LAN; cloud is used as automatic fallback after 3 consecutive LAN failures.
+- **Cloud-only**: Full cloud support identical to the AC Freedom app experience, including device discovery and multi-family setups.
+- **Ambient temperature in HomeKit**: `CurrentTemperature` now reflects the actual room reading from the device (not a fixed default).
+- **Correct mode and fan speed on LAN**: Broadlink wire protocol values properly translated to/from AUX API values — heating, cooling, dry, fan modes and all fan speeds work correctly.
+- **Fast, parallel polling**: All devices are polled concurrently; one unreachable device does not block others. Effective refresh latency ~33s at 30s interval.
+- **Stable cloud commands**: 300ms debounce prevents duplicate commands from multiple HomeKit handlers firing simultaneously.
+
+### Upgrading
+
+No configuration changes required from `0.0.7.x`. If you were on the `beta` tag, this release is now on `latest`.
+
+---
+
 ## v0.0.8-beta.22 - 2026-04-25
 
 fix: remove unused refreshTimer declaration (TypeScript warning cleanup)
