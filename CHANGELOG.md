@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.0.9 - 2026-04-26
+
+Homebridge v2 compatibility: updated engines range to support both v1 and v2.
+
+- homebridge: ^1.6.0 || ^2.0.0-beta.0
+- node: ^18.20.4 || ^20.15.1 || ^22
+
 ## v0.0.9-beta.1 - 2026-04-26
 
 ## Bug fix: AC se mostraba apagado en HomeKit después de encenderlo en modo cloud
