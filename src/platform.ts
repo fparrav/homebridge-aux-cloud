@@ -86,8 +86,8 @@ export class AuxCloudPlatform implements DynamicPlatformPlugin {
 
   public readonly featureSwitches: Set<FeatureSwitchKey>;
 
-  private readonly commandRetryCount: number;
-  private readonly commandTimeoutMs: number;
+  public readonly commandRetryCount: number;
+  public readonly commandTimeoutMs: number;
 
   private readonly handlers = new Map<string, AuxCloudPlatformAccessory>();
 
@@ -296,11 +296,7 @@ export class AuxCloudPlatform implements DynamicPlatformPlugin {
     * Usado en reconcileAccessories para saltar actualizaciones stale.
     */
   public isStaleState(endpointId: string): boolean {
-    const pending = this.pendingCommands.get(endpointId);
-    if (!pending) {
-      return false;
-     }
-    return Date.now() - pending.timestamp < 4000;
+    return this.pendingCommands.has(endpointId);
    }
 
   public requestRefresh(delayMs = 1_500): void {

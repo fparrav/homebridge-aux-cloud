@@ -457,12 +457,13 @@ export class AuxCloudPlatformAccessory {
     // Disparar comando en background
     this.platform.startDeviceCommand(this.device, payload);
 
-    // Liberar pending después de 4s para permitir el poll normal
+    // Liberar pending una vez el comando puede haber completado con retries
     if (seq !== null) {
       const endpointId = this.device.endpointId;
+      const guardMs = this.platform.commandTimeoutMs * (this.platform.commandRetryCount + 1) + 3000;
       setTimeout(() => {
         this.platform.completePendingCommand(endpointId);
-      }, 4000);
+      }, guardMs);
     }
   }
 
@@ -502,9 +503,10 @@ export class AuxCloudPlatformAccessory {
       const seq = this.platform.registerPendingCommandWithState(this.device.endpointId, 1);
       if (seq !== null) {
         const endpointId = this.device.endpointId;
+        const guardMs = this.platform.commandTimeoutMs * (this.platform.commandRetryCount + 1) + 3000;
         setTimeout(() => {
           this.platform.completePendingCommand(endpointId);
-        }, 4000);
+        }, guardMs);
       }
 
       this.platform.startDeviceCommand(this.device, AC_POWER_ON);
