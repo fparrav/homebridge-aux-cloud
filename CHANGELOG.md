@@ -1,5 +1,25 @@
 # Changelog
 
+## v0.0.9-beta.1 - 2026-04-26
+
+## Bug fix: AC se mostraba apagado en HomeKit después de encenderlo en modo cloud
+
+### Problema
+
+Al iniciar el AC desde apagado a modo calor usando HomeKit en modo cloud, se escuchaba la interacción del dispositivo pero HomeKit revertía el estado a inactivo (apagado). Solo ocurría cuando la API cloud respondía lento.
+
+### Causa raíz
+
+El *pending guard* que protege el estado optimista local de ser sobreescrito por polls stale tenía un timeout hardcodeado de **4 segundos**. En modo cloud, el comando puede tardar hasta `commandTimeoutMs × (commandRetryCount + 1) ≈ 15 s` por defecto. Cuando el guard expiraba antes de que el comando completara, el siguiente poll traía el estado anterior (AC=OFF) de la caché de la cloud y HomeKit mostraba el dispositivo como inactivo.
+
+En modo LAN el bug no ocurría porque los comandos completan en ~200 ms, bien dentro del window de 4 s.
+
+### Fix
+
+- `isStaleState` ahora usa `Map.has()` en lugar de un chequeo de tiempo hardcodeado de 4 s.
+- Los dos `setTimeout` que liberan el guard ahora usan `commandTimeoutMs × (commandRetryCount + 1) + 3 s` (18 s con config por defecto) para cubrir el peor caso de retries.
+- `commandRetryCount` y `commandTimeoutMs` se hacen públicos para que los handlers puedan calcular la duración correcta.
+
 ## v0.0.8 — Stable release (LAN + Cloud control) - 2026-04-26
 
 ## v0.0.8 — Stable Release
