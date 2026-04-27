@@ -7,6 +7,7 @@ import { createSocket } from 'dgram';
 import type { Logger } from 'homebridge';
 
 import { AuxCloudClient, type AuxDevice } from './AuxCloudClient';
+import { AC_POWER } from './constants';
 import type { DiscoveredDevice } from './broadlink/DeviceDiscovery';
 import {
   BroadlinkCommand,
@@ -375,7 +376,15 @@ export class AuxDeviceControl {
     const useLocal = mac ? this.shouldUseLocalControl(mac, options?.globalStrategy) : false;
 
     if (!useLocal) {
-      await this.sendCloudCommand(device, params, options?.cloudRetryCount ?? 2);
+      // Always include pwr in cloud commands that don't already specify it.
+      // Without this, the cloud uses its cached pwr=0 when building the device packet,
+      // turning the AC off on every mode/temp command sent concurrently with a pwr=1 command.
+      const currentPwr = device.params?.[AC_POWER];
+      const cloudParams =
+        AC_POWER in params || currentPwr === undefined
+          ? params
+          : { [AC_POWER]: currentPwr, ...params };
+      await this.sendCloudCommand(device, cloudParams, options?.cloudRetryCount ?? 2);
       this.recordSuccess(endpointId);
       return;
     }
