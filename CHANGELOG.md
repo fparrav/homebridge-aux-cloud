@@ -1,5 +1,22 @@
 # Changelog
 
+## v0.0.10 — Fix: cloud mode commands turn AC off after power-on - 2026-04-27
+
+## Bug fix: Cloud mode commands turn AC off after power-on
+
+When turning on a cloud-controlled AC from HomeKit, the device would turn back off seconds later (two audible beeps: power-on, then turn-off from the mode command).
+
+**Root cause:** The cloud command path in `AuxDeviceControl.sendCommand` sent partial parameter sets (e.g. `{ ac_mode: 1 }`) without the current power state (`pwr`). The AUX cloud used its cached `pwr=0` when building the full device packet, sending an implicit power-off alongside the mode change.
+
+The LAN path already merged full device state into every command. This release applies the equivalent fix to the cloud path: `pwr` is now always prepended to cloud commands when absent from the params and available in the local optimistic state.
+
+**Affected:** cloud-only devices (`controlStrategy: "cloud"`). LAN-only devices were not affected.
+
+**Regression since:** v0.0.5 (when concurrent power + mode HomeKit handlers were introduced).
+
+### Changes
+- `src/api/AuxDeviceControl.ts`: prepend `pwr` from `device.params` to cloud commands when not already present
+
 ## v0.0.10 - 2026-04-26
 
 ### Bug fix: Cloud mode/temperature commands turn AC off after power-on
