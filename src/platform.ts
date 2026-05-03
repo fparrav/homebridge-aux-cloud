@@ -223,6 +223,10 @@ export class AuxCloudPlatform implements DynamicPlatformPlugin {
         params: Record<string, number>,
         retryCount: number = this.commandRetryCount,
         ): Promise<void> {
+         // Ensure cloud session is valid before sending command
+        if (this.credentialsConfigured) {
+          await this.client.ensureLoggedIn(this.config.username!, this.config.password!);
+         }
         try {
           await this.deviceControl.sendCommand(device, params, {
             globalStrategy: this.config.controlStrategy,
@@ -249,8 +253,8 @@ export class AuxCloudPlatform implements DynamicPlatformPlugin {
       try {
         await this.sendDeviceParamsWithRetry(device, params, retryCount);
        } catch {
-         // Silently ignore — el caller ya aplicó estado optimista.
-         // El poll de 60s confirmará o el usuario reintentará.
+           // Command failed — schedule quick refresh to sync HomeKit state
+        this.requestRefresh(500);
        }
      })();
    }

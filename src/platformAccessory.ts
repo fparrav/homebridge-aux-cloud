@@ -643,6 +643,7 @@ export class AuxCloudPlatformAccessory {
     if (this.supportsComfortableWind) {
       payload[AC_COMFORTABLE_WIND] = level.comfortableWind ? 1 : 0;
     }
+    this.setupPendingGuard();
     this.platform.startDeviceCommand(this.device, payload);
   }
 
@@ -700,6 +701,7 @@ export class AuxCloudPlatformAccessory {
       if (this.supportsComfortableWind) {
         payload[AC_COMFORTABLE_WIND] = 0;
       }
+      this.setupPendingGuard();
       this.platform.startDeviceCommand(this.device, payload);
     } else {
       const target =
@@ -726,7 +728,23 @@ export class AuxCloudPlatformAccessory {
       if (this.supportsComfortableWind) {
         payload[AC_COMFORTABLE_WIND] = target.comfortableWind ? 1 : 0;
       }
+      this.setupPendingGuard();
       this.platform.startDeviceCommand(this.device, payload);
+    }
+  }
+
+  private setupPendingGuard(): void {
+    if (!this.device) return;
+    const seq = this.platform.registerPendingCommandWithState(
+      this.device.endpointId,
+      (this.device.state ?? 1) as 0 | 1,
+    );
+    if (seq !== null) {
+      const endpointId = this.device.endpointId;
+      const guardMs = this.platform.commandTimeoutMs * (this.platform.commandRetryCount + 1) + 3000;
+      setTimeout(() => {
+        this.platform.completePendingCommand(endpointId);
+      }, guardMs);
     }
   }
 
@@ -760,6 +778,7 @@ export class AuxCloudPlatformAccessory {
     this.updateCharacteristicsFromDevice();
     this.setFaulted(false);
 
+    this.setupPendingGuard();
     this.platform.startDeviceCommand(this.device, payload);
   }
 
