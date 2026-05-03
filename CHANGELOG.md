@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.0.11-beta.1 - 2026-05-03
+
+## Bug fixes
+
+### Bug 1 — Fan auto y oscilación revertían aleatoriamente en dispositivos LAN
+Los handlers `handleRotationSpeedSet`, `handleFanAutoSet` y `handleSwingModeSet` no registraban un *pending guard*, lo que permitía que el ciclo de poll sobreescribiera el estado optimista mientras el comando LAN estaba en vuelo. Ahora se registra el guard con la misma lógica que ya usaba `handleActiveSet`.
+
+### Bug 2 — Comando "apagar" no llegaba al dispositivo cloud
+La sesión cloud solo se refrescaba durante el ciclo de poll. Si la sesión expiraba entre polls, los comandos cloud fallaban silenciosamente y el estado de HomeKit revertía al valor real del dispositivo tras ~18–30s. Ahora `sendDeviceParamsWithRetry` llama `ensureLoggedIn` proactivamente antes de cada comando. Además, `startDeviceCommand` dispara un refresh rápido (500ms) ante cualquier fallo para corregir el estado en HomeKit rápidamente en lugar de esperar al siguiente poll.
+
 ## v0.0.10 — Fix: cloud mode commands turn AC off after power-on - 2026-04-27
 
 ## Bug fix: Cloud mode commands turn AC off after power-on
