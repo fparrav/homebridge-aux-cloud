@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.0.11-beta.4 - 2026-05-04
+
+fix: revert homebridge devDependency to ^1.8.0 so CI yarn install resolves correctly (v2 only declared in engines field)
+
 ## v0.0.11-beta.2 - 2026-05-04
 
 feat: support Homebridge v2 in engines field (^1.8.0 || ^2.0.0) to pass v2 readiness check
