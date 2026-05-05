@@ -133,6 +133,12 @@
                  "default": false,
                  "description": "When enabled, exposes AUX ACs as Matter accessories for Apple Home, Google Home, etc. Requires Homebridge with Matter plugin installed."
              },
+             "enableHomeKit": {
+                 "title": "Enable HomeKit (HAP) Registration",
+                 "type": "boolean",
+                 "default": true,
+                 "description": "When disabled, ACs are not registered as HomeKit accessories via HAP. Useful when using Matter-only mode."
+             },
             "devices": {
                 "title": "Device Mappings",
                 "type": "array",
