@@ -50,6 +50,7 @@ export interface AuxCloudPlatformConfig extends PlatformConfig {
   controlStrategy?: 'local-first' | 'cloud-only';
   localControlEnabled?: boolean;
   enableMatter?: boolean;
+  enableHomeKit?: boolean;
   devices?: Array<{
     endpointId?: string;
     mac?: string;
@@ -90,6 +91,7 @@ export class AuxCloudPlatform implements DynamicPlatformPlugin {
 
   public readonly commandRetryCount: number;
   public readonly commandTimeoutMs: number;
+  public readonly enableHomeKit: boolean;
 
   private readonly handlers = new Map<string, AuxCloudPlatformAccessory>();
 
@@ -138,6 +140,9 @@ export class AuxCloudPlatform implements DynamicPlatformPlugin {
        ),
      );
     this.featureSwitches = configuredFeatureSwitches;
+
+      // HomeKit registration toggle (default true — disabled Matter only mode)
+    this.enableHomeKit = this.config.enableHomeKit !== false;
 
      // Retry / timeout config
     this.commandRetryCount =
@@ -198,7 +203,9 @@ export class AuxCloudPlatform implements DynamicPlatformPlugin {
      }
 
     this.log.info('Loading accessory from cache: %s', accessory.displayName);
-    this.accessories.push(accessory);
+    if (this.enableHomeKit) {
+      this.accessories.push(accessory);
+       }
 
     if (!this.handlers.has(accessory.UUID)) {
       const handler = new AuxCloudPlatformAccessory(this, accessory);
@@ -534,26 +541,33 @@ export class AuxCloudPlatform implements DynamicPlatformPlugin {
         const handler = new AuxCloudPlatformAccessory(this, accessory);
         handler.updateAccessory(mergedDevice);
 
+        if (this.enableHomeKit) {
         this.accessories.push(accessory);
         this.handlers.set(accessory.UUID, handler);
         this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
-       }
+        }
      }
+      }
 
-    const staleAccessories = this.accessories.filter((accessory) => !seen.has(accessory.UUID));
-    if (staleAccessories.length > 0) {
-      this.log.info('Removing %d stale AUX Cloud accessories', staleAccessories.length);
-      this.api.unregisterPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, staleAccessories);
 
-      for (const accessory of staleAccessories) {
-        this.handlers.delete(accessory.UUID);
-        const index = this.accessories.indexOf(accessory);
-        if (index >= 0) {
-          this.accessories.splice(index, 1);
-         }
+    if (this.enableHomeKit) {
+      const staleAccessories = this.accessories.filter((accessory) => !seen.has(accessory.UUID));
+      if (staleAccessories.length > 0) {
+        this.log.info('Removing %d stale AUX Cloud accessories', staleAccessories.length);
+        this.api.unregisterPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, staleAccessories);
+
+        for (const accessory of staleAccessories) {
+          this.handlers.delete(accessory.UUID);
+          const index = this.accessories.indexOf(accessory);
+          if (index >= 0) {
+            this.accessories.splice(index, 1);
+            }
+          }
+        }
+      }
        }
-     }
-   }
+
+
 
   private mergeParams(
     existing: Record<string, number> | undefined,
