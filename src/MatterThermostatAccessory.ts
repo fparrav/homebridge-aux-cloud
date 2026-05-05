@@ -38,6 +38,31 @@ import {
 import type { AuxCloudPlatform, FeatureSwitchKey } from './platform';
 import type { AuxDevice } from './api/AuxCloudClient';
 
+// Matter accessory configuration type (returned by toAccessory())
+type MatterHandlerCallback =
+  | ((request: { onOff: number }) => Promise<void>)
+  | ((request: { fanMode: number; oldFanMode: number }) => Promise<void>)
+  | ((request: { percentSetting: number; oldPercentSetting: number }) => Promise<void>)
+  | ((request: { occupiedHeatingSetpoint: number }) => Promise<void>)
+  | ((request: { occupiedCoolingSetpoint: number }) => Promise<void>)
+  | ((request: { systemMode: number }) => Promise<void>);
+
+interface MatterAccessoryConfig {
+   [key: string]: unknown;
+  UUID: string;
+  displayName: string;
+  deviceType: string;
+  serialNumber: string;
+  manufacturer: string;
+  model: string;
+  firmwareRevision: string;
+  hardwareRevision: string;
+  clusters: Record<string, Record<string, unknown>>;
+  handlers: Record<string, Record<string, MatterHandlerCallback>>;
+  parts?: unknown[];
+  context?: Record<string, unknown>;
+}
+
 // Matter cluster constant mappings (per Matter Spec § 9.1)
 const THERMOSTAT_MODE_AUTO = 1;
 // 2 = Reserved
@@ -70,7 +95,7 @@ export class MatterThermostatAccessory {
   /**
    * Convert this accessory to a MatterAccessory object for registration.
    */
-  toAccessory() {
+  toAccessory(): MatterAccessoryConfig {
     const displayName = this.device?.friendlyName ?? 'AUX AC';
     const productId = this.device?.productId;
     const deviceName = AuxProducts.getDeviceName(productId) ?? 'AUX Air Conditioner';
@@ -127,7 +152,7 @@ export class MatterThermostatAccessory {
           systemModeChange: async (request: { systemMode: number }) => this.handleSystemModeChange(request),
         },
       },
-    } as any;
+    } as MatterAccessoryConfig;
   }
 
   // ─────────────────────────────────────────────
@@ -386,7 +411,7 @@ export class MatterThermostatAccessory {
             onOffSet: async (request: { onOff: number }) => this.handleSwitchSet(m.key, m.onPayload, m.offPayload, request),
           },
         },
-      } as unknown as Record<string, unknown>);
+      } as MatterAccessoryConfig);
     }
 
     return switches;
@@ -438,12 +463,12 @@ export class MatterThermostatAccessory {
         this.device = updated;
         // Update Matter state
         await this.api.matter.updateAccessoryState(
-          (this.toAccessory() as any).UUID,
+          this.toAccessory().UUID,
           'onOff',
           { onOff: this.getMatterOnOffState() },
         );
         await this.api.matter.updateAccessoryState(
-          (this.toAccessory() as any).UUID,
+          this.toAccessory().UUID,
           'fanControl',
           {
             fanMode: this.getMatterFanMode(),
@@ -452,7 +477,7 @@ export class MatterThermostatAccessory {
           },
         );
         await this.api.matter.updateAccessoryState(
-          (this.toAccessory() as any).UUID,
+          this.toAccessory().UUID,
           'temperatureControl',
           {
             occupiedHeatingSetpoint: this.getMatterHeatingSetpoint(),
@@ -461,7 +486,7 @@ export class MatterThermostatAccessory {
           },
         );
         await this.api.matter.updateAccessoryState(
-          (this.toAccessory() as any).UUID,
+          this.toAccessory().UUID,
           'thermostat',
           {
             systemMode: this.getMatterSystemMode(),

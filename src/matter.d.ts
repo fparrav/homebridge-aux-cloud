@@ -1,4 +1,5 @@
-import type { EndpointType, Logger } from 'homebridge';
+// eslint-disable-next-line no-unused-vars
+import type { EndpointType } from 'homebridge';
 
 declare module 'homebridge' {
   interface API {
