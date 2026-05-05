@@ -11,6 +11,7 @@ import type {
 import { AuxApiError, AuxCloudClient, type AuxDevice } from './api/AuxCloudClient';
 import { AuxDeviceControl } from './api/AuxDeviceControl';
 import { AuxCloudPlatformAccessory } from './platformAccessory';
+import { MatterThermostatAccessory } from './MatterThermostatAccessory';
 import { PLATFORM_NAME, PLUGIN_NAME } from './settings';
 
 export type FeatureSwitchKey =
@@ -48,6 +49,7 @@ export interface AuxCloudPlatformConfig extends PlatformConfig {
      // Local (LAN) control settings
   controlStrategy?: 'local-first' | 'cloud-only';
   localControlEnabled?: boolean;
+  enableMatter?: boolean;
   devices?: Array<{
     endpointId?: string;
     mac?: string;
@@ -105,6 +107,9 @@ export class AuxCloudPlatform implements DynamicPlatformPlugin {
   private lastKnownCloudDevices: AuxDevice[] = [];
 
   private refreshDebounce?: NodeJS.Timeout;
+
+    // Matter accessory instances
+  private readonly matterAccessories: MatterThermostatAccessory[] = [];
 
   constructor(
     public readonly log: Logger,
@@ -175,6 +180,13 @@ export class AuxCloudPlatform implements DynamicPlatformPlugin {
        }
 
       void this.initialize();
+
+       // Register Matter accessories if Matter is available and enabled
+      if (this.api.matter?.isMatterAvailable() && this.config.enableMatter) {
+        this.registerMatterAccessories();
+       }
+
+        // Unregister Matter accessories in onPlatformUnload hook (defined below)
      });
    }
 
@@ -313,7 +325,7 @@ export class AuxCloudPlatform implements DynamicPlatformPlugin {
      }, delayMs);
    }
 
-private getLanOnlyDevices(): AuxDevice[] {
+  private getLanOnlyDevices(): AuxDevice[] {
     if (!this.config.localControlEnabled) return [];
     return this.deviceControl.getLanOnlyMappings().map((mapping) => {
       const normalizedMac = mapping.mac.toLowerCase();
@@ -394,7 +406,7 @@ private getLanOnlyDevices(): AuxDevice[] {
 
 
 
-  private async refreshDevices(): Promise<void> {
+  public async refreshDevices(): Promise<void> {
     if (this.isSyncing) {
       return;
     }
@@ -447,6 +459,9 @@ private getLanOnlyDevices(): AuxDevice[] {
 
       if (allDevices.length > 0) {
         this.reconcileAccessories(allDevices);
+
+         // Update Matter accessory states
+        this.refreshMatterState();
       }
     } finally {
       this.isSyncing = false;
@@ -556,4 +571,83 @@ private getLanOnlyDevices(): AuxDevice[] {
 
     return merged;
    }
+
+    // ─────────────────────────────────────────────
+    // Matter accessory registration
+    // ─────────────────────────────────────────────
+
+    private registerMatterAccessories(): void {
+      if (!this.api.matter?.isMatterAvailable()) {
+        return;
+      }
+
+      const allDevices = [...this.devicesById.values(), ...this.getLanOnlyDevices()];
+      for (const device of allDevices) {
+        try {
+          const matterAccessory = new MatterThermostatAccessory(this, device);
+          this.matterAccessories.push(matterAccessory);
+
+            // Register the main thermostat accessory
+          const thermostat = matterAccessory.toAccessory();
+          this.api.matter.registerPlatformAccessories(
+            PLUGIN_NAME,
+            PLATFORM_NAME,
+            [thermostat],
+          );
+          this.log.info('[Matter] Registered thermostat for "%s" (%s)', device.friendlyName, device.endpointId);
+
+            // Register feature switch accessories
+          const switches = matterAccessory.getMatterSwitchAccessories();
+          if (switches.length > 0) {
+            this.api.matter.registerPlatformAccessories(
+              PLUGIN_NAME,
+              PLATFORM_NAME,
+              switches,
+            );
+            this.log.info('[Matter] Registered %d switches for "%s"', switches.length, device.friendlyName);
+          }
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          this.log.error('[Matter] Failed to register accessory for "%s": %s', device.friendlyName, message);
+        }
+      }
+    }
+
+    private unregisterMatterAccessories(): void {
+      if (this.matterAccessories.length === 0) {
+        return;
+      }
+
+      const allAccessories: unknown[] = [];
+      for (const matterAccessory of this.matterAccessories) {
+        const thermostat = matterAccessory.toAccessory();
+        allAccessories.push(thermostat);
+        const switches = matterAccessory.getMatterSwitchAccessories();
+        allAccessories.push(...switches);
+      }
+
+      this.api.matter.unregisterPlatformAccessories(
+        PLUGIN_NAME,
+        PLATFORM_NAME,
+        allAccessories,
+      );
+      this.matterAccessories.length = 0;
+      this.log.info('[Matter] Unregistered all accessories');
+    }
+
+    // DynamicPlatformPlugin hook — called when the platform is unloaded
+    onPlatformUnload(): void {
+      this.unregisterMatterAccessories();
+    }
+
+    // ─────────────────────────────────────────────
+    // Matter state refresh — called on each poll
+    // ─────────────────────────────────────────────
+
+    private refreshMatterState(): void {
+      for (const matterAccessory of this.matterAccessories) {
+        void matterAccessory.refresh();
+      }
+    }
+
 }

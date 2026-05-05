@@ -127,6 +127,12 @@
                 "default": false,
                 "description": "When enabled, commands are sent directly to the device over LAN when possible, falling back to AUX Cloud if LAN is unavailable."
             },
+             "enableMatter": {
+                 "title": "Enable Matter Support",
+                 "type": "boolean",
+                 "default": false,
+                 "description": "When enabled, exposes AUX ACs as Matter accessories for Apple Home, Google Home, etc. Requires Homebridge with Matter plugin installed."
+             },
             "devices": {
                 "title": "Device Mappings",
                 "type": "array",
