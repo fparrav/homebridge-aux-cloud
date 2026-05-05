@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.0.12-beta.3 - 2026-05-05
+
+fix: guard `isMatterAvailable` call para compatibilidad con versiones de Homebridge que no exponen el método. Evita TypeError al arrancar cuando Matter está parcialmente disponible.
+
 ## v0.0.12-beta.2 - 2026-05-05
 
 Chore:
