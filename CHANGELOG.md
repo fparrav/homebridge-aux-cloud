@@ -1,5 +1,14 @@
 # Changelog
 
+## v0.0.12-beta.2 - 2026-05-05
+
+Chore:
+- Remove all @typescript-eslint/no-explicit-any casts from MatterThermostatAccessory
+- Define MatterAccessoryConfig interface with proper MatterHandlerCallback union type
+- Eliminate 4 remaining type assertion casts in refresh() method
+
+Build now passes ESLint and TypeScript with zero errors.
+
 ## v0.0.11-beta.4 - 2026-05-04
 
 fix: revert homebridge devDependency to ^1.8.0 so CI yarn install resolves correctly (v2 only declared in engines field)
