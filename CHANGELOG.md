@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.0.11 - 2026-05-05
+
+Stable release based on v0.0.11-beta.4. HomeKit plugin for AUX Cloud AC devices with LAN and cloud control.
+
 ## v0.0.12-beta.3 - 2026-05-05
 
 fix: guard `isMatterAvailable` call para compatibilidad con versiones de Homebridge que no exponen el método. Evita TypeError al arrancar cuando Matter está parcialmente disponible.
