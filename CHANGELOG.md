@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.0.12-beta.4 - 2026-05-05
+
+feat: add enableHomeKit toggle to config schema UI
+
 ## v0.0.11 - 2026-05-05
 
 Stable release based on v0.0.11-beta.4. HomeKit plugin for AUX Cloud AC devices with LAN and cloud control.
