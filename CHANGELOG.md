@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.0.12-beta.5 - 2026-05-05
+
+fix: guard isMatterAvailable correctly (typeof check), fix: push commits to origin before release so CI compiles the right code, feat: add enableHomeKit toggle to config schema UI
+
 ## v0.0.12-beta.4 - 2026-05-05
 
 feat: add enableHomeKit toggle to config schema UI
