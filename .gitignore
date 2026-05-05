@@ -11,4 +11,7 @@ coverage/
 .idea/
 .vscode/
 AGENTS.md
-plans/CLAUDE.md
+CLAUDE.md
+.claude/
+.planning/
+plans/
