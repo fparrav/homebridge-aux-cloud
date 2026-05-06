@@ -190,7 +190,7 @@ export class AuxCloudPlatform implements DynamicPlatformPlugin {
 
       void this.initialize().then(() => {
         if (matterAvailable && this.config.enableMatter) {
-          this.registerMatterAccessories();
+          void this.registerMatterAccessories();
         }
       });
      });
@@ -593,7 +593,7 @@ export class AuxCloudPlatform implements DynamicPlatformPlugin {
     // Matter accessory registration
     // ─────────────────────────────────────────────
 
-    private registerMatterAccessories(): void {
+    private async registerMatterAccessories(): Promise<void> {
       if (!this.api.isMatterAvailable?.()) {
         return;
       }
@@ -604,27 +604,28 @@ export class AuxCloudPlatform implements DynamicPlatformPlugin {
         if (deviceConfig?.enableMatter === false) continue;
         try {
           const matterAccessory = new MatterThermostatAccessory(this, device);
-          this.matterAccessories.push(matterAccessory);
 
-            // Register the main thermostat accessory
+          // Register the main thermostat accessory — await so failures are caught
           const thermostat = matterAccessory.toAccessory();
-          this.api.matter.registerPlatformAccessories(
+          await this.api.matter.registerPlatformAccessories(
             PLUGIN_NAME,
             PLATFORM_NAME,
             [thermostat],
           );
-          this.log.info('[Matter] Registered thermostat for "%s" (%s)', device.friendlyName, device.endpointId);
 
-            // Register feature switch accessories
+          // Register feature switch accessories
           const switches = matterAccessory.getMatterSwitchAccessories();
           if (switches.length > 0) {
-            this.api.matter.registerPlatformAccessories(
+            await this.api.matter.registerPlatformAccessories(
               PLUGIN_NAME,
               PLATFORM_NAME,
               switches,
             );
-            this.log.info('[Matter] Registered %d switches for "%s"', switches.length, device.friendlyName);
           }
+
+          // Only add to poll list after successful registration
+          this.matterAccessories.push(matterAccessory);
+          this.log.info('[Matter] Registered "%s" (%d switches)', device.friendlyName, switches.length);
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error);
           this.log.error('[Matter] Failed to register accessory for "%s": %s', device.friendlyName, message);
