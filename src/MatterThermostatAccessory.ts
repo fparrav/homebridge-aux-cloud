@@ -104,7 +104,7 @@ export class MatterThermostatAccessory {
       UUID: this.api.matter.uuid.generate(`matter-thermostat-${this.endpointId}`),
       displayName,
       deviceType: this.api.matter.deviceTypes.Thermostat,
-      serialNumber: this.endpointId,
+      serialNumber: this.endpointId.slice(0, 32),
       manufacturer: 'AUX',
       model: deviceName,
       firmwareRevision: this.api.packageJSON?.version ?? '1.0.0',
@@ -117,7 +117,7 @@ export class MatterThermostatAccessory {
           fanMode: this.getMatterFanMode(),
           percentSetting: this.getMatterFanPercent(),
           percentCurrent: this.getMatterFanPercent(),
-          fanModeSequence: 2,  // Off/Low/Med/High/Auto
+          fanModeSequence: 0,  // OffLowMedHigh (no AUT feature → Auto not allowed)
          },
         temperatureControl: {
           occupiedHeatingSetpoint: this.getMatterHeatingSetpoint(),
@@ -396,7 +396,7 @@ export class MatterThermostatAccessory {
         UUID: uuid,
         displayName: `${this.device.friendlyName} - ${m.label}`,
         deviceType: this.api.matter.deviceTypes.OnOffSwitch,
-        serialNumber: `${this.endpointId}-${m.key}`,
+        serialNumber: `${this.endpointId}-${m.key}`.slice(0, 32),
         manufacturer: 'AUX',
         model: `${AuxProducts.getDeviceName(this.device.productId) ?? 'AUX'} ${m.label}`,
         firmwareRevision: this.api.packageJSON?.version ?? '1.0.0',
