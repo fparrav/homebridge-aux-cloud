@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.0.12-beta.8 - 2026-05-06
+
+fix: default fanMode to Low instead of Auto (AUT feature not declared in FanControl cluster)
+
 ## v0.0.12-beta.7 - 2026-05-06
 
 ## Fix crítico — Matter no registraba dispositivos
