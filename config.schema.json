@@ -175,6 +175,18 @@
                                 "cloud"
                             ],
                             "description": "Force local-only or cloud-only control for this device (overrides global controlStrategy). Devices without endpointId are always local."
+                        },
+                        "enableHAP": {
+                            "title": "Register in HomeKit (HAP)",
+                            "type": "boolean",
+                            "default": true,
+                            "description": "Register this device as a HomeKit accessory via HAP. Overrides global enableHomeKit for this device only."
+                        },
+                        "enableMatter": {
+                            "title": "Register in Matter",
+                            "type": "boolean",
+                            "default": true,
+                            "description": "Register this device as a Matter accessory. Requires global enableMatter to be true."
                         }
                     }
                 }

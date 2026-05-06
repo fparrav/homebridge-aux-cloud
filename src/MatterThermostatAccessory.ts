@@ -456,8 +456,6 @@ export class MatterThermostatAccessory {
   async refresh(): Promise<void> {
     if (!this.device) return;
     try {
-      // Refresh device state from cloud
-      await this.platform.refreshDevices() as void;
       const updated = this.platform.getDevice(this.endpointId);
       if (updated) {
         this.device = updated;
