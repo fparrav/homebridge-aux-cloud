@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.0.12-beta.12 - 2026-05-06
+
+## Fixes
+
+- **Switches agrupados**: los switches de cada AC (Mildew Proof, Screen Display, etc.) ahora se registran como `parts` del termostato, en vez de como accesorios independientes. Deben aparecer agrupados bajo el mismo dispositivo en la app Home.
+- **model/productName**: truncado a 32 chars para satisfacer el constraint de Matter en todos los accesorios.
+
 ## v0.0.12-beta.11 - 2026-05-06
 
 ## Fixes
