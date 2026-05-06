@@ -1,5 +1,21 @@
 # Changelog
 
+## v0.0.12-beta.13 - 2026-05-06
+
+## Breaking fix — requiere reset del estado Matter en Homebridge
+
+Eliminados `fanControl` y `onOff` del cluster del termostato Matter, siguiendo el plugin de referencia (homebridge-matter ThermostatAccessory). Estos clusters causaban errores de conformance por el feature flag `AUT` que la API de plugins de Homebridge no permite declarar.
+
+El termostato Matter ahora solo expone el cluster `thermostat` (setpoints + modo del sistema), con las switches de features como `parts`.
+
+### ⚠️ Paso obligatorio: resetear estado Matter
+
+El estado Matter persistido de betas anteriores tiene `fanModeSequence: 2` en caché, lo que corrompe la inicialización al reiniciar. Antes de actualizar:
+
+**En Homebridge UI → Complementos → Homebridge Matter → Configuración → Restablecer estado Matter**
+
+O equivalente desde la CLI/UI de Homebridge para limpiar el estado Matter persistido. Luego instalar beta.13 y reiniciar Homebridge.
+
 ## v0.0.12-beta.12 - 2026-05-06
 
 ## Fixes
