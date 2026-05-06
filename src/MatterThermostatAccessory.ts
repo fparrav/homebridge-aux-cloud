@@ -112,7 +112,7 @@ export class MatterThermostatAccessory {
       hardwareRevision: '1.0.0',
       clusters: {
         thermostat: {
-          externalMeasuredIndoorTemperature: this.getMatterCurrentTemp(),
+          localTemperature: this.getMatterCurrentTemp(),
           occupiedHeatingSetpoint: this.getMatterHeatingSetpoint(),
           occupiedCoolingSetpoint: this.getMatterCoolingSetpoint(),
           minHeatSetpointLimit: 700,
@@ -122,7 +122,9 @@ export class MatterThermostatAccessory {
           minSetpointDeadBand: 25,
           controlSequenceOfOperation: 4,
           systemMode: this.getMatterSystemMode(),
-          externallyMeasuredOccupancy: false,
+        },
+        onOff: {
+          onOff: this.getMatterOnOffState(),
         },
       },
       handlers: {
@@ -130,6 +132,9 @@ export class MatterThermostatAccessory {
           systemModeChange: async (request: { systemMode: number }) => this.handleSystemModeChange(request),
           occupiedHeatingSetpointChange: async (request: { occupiedHeatingSetpoint: number }) => this.handleHeatingSetpointChange(request),
           occupiedCoolingSetpointChange: async (request: { occupiedCoolingSetpoint: number }) => this.handleCoolingSetpointChange(request),
+        },
+        onOff: {
+          onOffSet: async (request: { onOff: number }) => this.handleOnOffSet(request),
         },
       },
     } as MatterAccessoryConfig;
@@ -443,10 +448,14 @@ export class MatterThermostatAccessory {
         const uuid = this.toAccessory().UUID;
 
         await this.api.matter.updateAccessoryState(uuid, 'thermostat', {
-          externalMeasuredIndoorTemperature: this.getMatterCurrentTemp(),
+          localTemperature: this.getMatterCurrentTemp(),
           occupiedHeatingSetpoint: this.getMatterHeatingSetpoint(),
           occupiedCoolingSetpoint: this.getMatterCoolingSetpoint(),
           systemMode: this.getMatterSystemMode(),
+        });
+
+        await this.api.matter.updateAccessoryState(uuid, 'onOff', {
+          onOff: this.getMatterOnOffState(),
         });
 
         // Update switch states — switches are parts of the thermostat, use partId
