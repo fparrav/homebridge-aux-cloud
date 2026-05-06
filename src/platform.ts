@@ -593,6 +593,25 @@ export class AuxCloudPlatform implements DynamicPlatformPlugin {
     // Matter accessory registration
     // ─────────────────────────────────────────────
 
+    private async registerOrResumeAccessories(
+      accessories: unknown[],
+      deviceName: string,
+    ): Promise<void> {
+      for (const acc of accessories) {
+        try {
+          await this.api.matter.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [acc]);
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          if (message.includes('already defined')) {
+            // Accessory is persisted from a previous session — still available, not a real error
+            this.log.debug('[Matter] "%s" already registered (resuming from persistence)', deviceName);
+          } else {
+            throw error;
+          }
+        }
+      }
+    }
+
     private async registerMatterAccessories(): Promise<void> {
       if (!this.api.isMatterAvailable?.()) {
         return;
@@ -604,26 +623,12 @@ export class AuxCloudPlatform implements DynamicPlatformPlugin {
         if (deviceConfig?.enableMatter === false) continue;
         try {
           const matterAccessory = new MatterThermostatAccessory(this, device);
-
-          // Register the main thermostat accessory — await so failures are caught
           const thermostat = matterAccessory.toAccessory();
-          await this.api.matter.registerPlatformAccessories(
-            PLUGIN_NAME,
-            PLATFORM_NAME,
-            [thermostat],
-          );
-
-          // Register feature switch accessories
           const switches = matterAccessory.getMatterSwitchAccessories();
-          if (switches.length > 0) {
-            await this.api.matter.registerPlatformAccessories(
-              PLUGIN_NAME,
-              PLATFORM_NAME,
-              switches,
-            );
-          }
 
-          // Only add to poll list after successful registration
+          await this.registerOrResumeAccessories([thermostat, ...switches], device.friendlyName);
+
+          // Only add to poll list after successful registration (or resume from persistence)
           this.matterAccessories.push(matterAccessory);
           this.log.info('[Matter] Registered "%s" (%d switches)', device.friendlyName, switches.length);
         } catch (error) {

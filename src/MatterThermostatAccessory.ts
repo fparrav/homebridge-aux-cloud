@@ -394,7 +394,7 @@ export class MatterThermostatAccessory {
       const uuid = this.api.matter.uuid.generate(`matter-switch-${this.endpointId}-${m.key}`);
       switches.push({
         UUID: uuid,
-        displayName: `${this.device.friendlyName} — ${m.label}`,
+        displayName: `${this.device.friendlyName} - ${m.label}`,
         deviceType: this.api.matter.deviceTypes.OnOffSwitch,
         serialNumber: `${this.endpointId}-${m.key}`,
         manufacturer: 'AUX',
