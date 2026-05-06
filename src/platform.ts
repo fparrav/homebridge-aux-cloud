@@ -626,7 +626,11 @@ export class AuxCloudPlatform implements DynamicPlatformPlugin {
           const thermostat = matterAccessory.toAccessory();
           const switches = matterAccessory.getMatterSwitchAccessories();
 
-          await this.registerOrResumeAccessories([thermostat, ...switches], device.friendlyName);
+          // Nest switches as parts of the thermostat so they appear grouped in Home
+          if (switches.length > 0) {
+            (thermostat as Record<string, unknown>).parts = switches;
+          }
+          await this.registerOrResumeAccessories([thermostat], device.friendlyName);
 
           // Only add to poll list after successful registration (or resume from persistence)
           this.matterAccessories.push(matterAccessory);
@@ -645,10 +649,8 @@ export class AuxCloudPlatform implements DynamicPlatformPlugin {
 
       const allAccessories: unknown[] = [];
       for (const matterAccessory of this.matterAccessories) {
-        const thermostat = matterAccessory.toAccessory();
-        allAccessories.push(thermostat);
-        const switches = matterAccessory.getMatterSwitchAccessories();
-        allAccessories.push(...switches);
+        // Only the thermostat is registered directly; switches are parts and unregistered with it
+        allAccessories.push(matterAccessory.toAccessory());
       }
 
       this.api.matter.unregisterPlatformAccessories(

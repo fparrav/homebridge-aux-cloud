@@ -106,7 +106,7 @@ export class MatterThermostatAccessory {
       deviceType: this.api.matter.deviceTypes.Thermostat,
       serialNumber: this.endpointId.slice(0, 32),
       manufacturer: 'AUX',
-      model: deviceName,
+      model: deviceName?.slice(0, 32) ?? 'AUX',
       firmwareRevision: this.api.packageJSON?.version ?? '1.0.0',
       hardwareRevision: '1.0.0',
       clusters: {
@@ -398,7 +398,7 @@ export class MatterThermostatAccessory {
         deviceType: this.api.matter.deviceTypes.OnOffSwitch,
         serialNumber: `${this.endpointId}-${m.key}`.slice(0, 32),
         manufacturer: 'AUX',
-        model: `${AuxProducts.getDeviceName(this.device.productId) ?? 'AUX'} ${m.label}`,
+        model: `${AuxProducts.getDeviceName(this.device.productId) ?? 'AUX'} ${m.label}`.slice(0, 32),
         firmwareRevision: this.api.packageJSON?.version ?? '1.0.0',
         hardwareRevision: '1.0.0',
         clusters: {
@@ -491,14 +491,15 @@ export class MatterThermostatAccessory {
           },
         );
 
-        // Update switch states
+        // Update switch states — switches are parts of the thermostat, use partId
+        const thermostatUUID = this.toAccessory().UUID;
         const switchAccessories = this.getMatterSwitchAccessories();
         for (const sw of switchAccessories) {
-          const uuid = sw.UUID as string;
+          const partId = sw.UUID as string;
           const clusters = sw.clusters as Record<string, Record<string, unknown>>;
           const onOff = clusters?.onOff?.onOff as number;
-          if (uuid && onOff !== undefined) {
-            await this.api.matter.updateAccessoryState(uuid, 'onOff', { onOff });
+          if (partId && onOff !== undefined) {
+            await this.api.matter.updateAccessoryState(thermostatUUID, 'onOff', { onOff }, partId);
           }
         }
       }
