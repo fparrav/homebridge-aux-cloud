@@ -299,16 +299,16 @@ export class MatterThermostatAccessory {
   }
 
   private getMatterFanMode(): number {
-    if (!this.device) return 5; // Auto = default
+    if (!this.device) return 1; // Low (safe default — Auto requires AUT feature flag)
     const fan = this.device.params?.[AC_FAN_SPEED];
-    if (fan === undefined) return 5; // auto
+    if (fan === undefined) return 1; // Low
     switch (fan) {
       case AuxFanSpeed.MUTE: return 0; // Off
       case AuxFanSpeed.LOW: return 1; // Low
       case AuxFanSpeed.MEDIUM: return 2; // Medium
       case AuxFanSpeed.HIGH: return 3; // High
       case AuxFanSpeed.TURBO: return 3; // High (closest to Turbo)
-      default: return 5; // Auto
+      default: return 1; // Low (Auto not valid without AUT feature)
     }
   }
 
