@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.0.12-beta.11 - 2026-05-06
+
+## Fixes
+
+- **fanModeSequence**: cambia de `2` (OffLowMedHighAuto) a `0` (OffLowMedHigh). El valor 2 requiere la feature flag `AUT` que no está declarada — mismo constraint que `fanMode=5` de betas anteriores, pero sobre la secuencia.
+- **serialNumber**: trunca a 32 caracteres en termostatos y switches. Matter impone un máximo de 32 bytes en este campo.
+
 ## v0.0.12-beta.10 - 2026-05-06
 
 ## Fixes
