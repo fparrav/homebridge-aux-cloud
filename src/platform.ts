@@ -186,9 +186,7 @@ export class AuxCloudPlatform implements DynamicPlatformPlugin {
         return;
        }
 
-      const matterAvailable = typeof this.api.matter?.isMatterAvailable === 'function'
-        ? this.api.matter.isMatterAvailable()
-        : false;
+      const matterAvailable = this.api.isMatterAvailable?.() ?? false;
 
       void this.initialize().then(() => {
         if (matterAvailable && this.config.enableMatter) {
@@ -596,7 +594,7 @@ export class AuxCloudPlatform implements DynamicPlatformPlugin {
     // ─────────────────────────────────────────────
 
     private registerMatterAccessories(): void {
-      if (typeof this.api.matter?.isMatterAvailable !== 'function' || !this.api.matter.isMatterAvailable()) {
+      if (!this.api.isMatterAvailable?.()) {
         return;
       }
 

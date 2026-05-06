@@ -5,6 +5,9 @@ declare module 'homebridge' {
   interface API {
     matter: MatterAPI;
     packageJSON: { version: string };
+    // isMatterAvailable/isMatterEnabled are on HomebridgeAPI (not on api.matter)
+    isMatterAvailable?(): boolean;
+    isMatterEnabled?(): boolean;
   }
 
   interface MatterAPI {
@@ -33,8 +36,6 @@ declare module 'homebridge' {
       cluster: string,
       partId?: string,
     ): Promise<Record<string, unknown> | undefined>;
-    isMatterAvailable(): boolean;
-    isMatterEnabled(): boolean;
   }
 
   interface MatterAccessory {
