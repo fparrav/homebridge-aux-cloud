@@ -184,16 +184,41 @@ export class AuxCloudPlatform implements DynamicPlatformPlugin {
     this.api.on('didFinishLaunching', () => {
       if (!this.credentialsConfigured) {
         return;
-       }
+      }
 
+      const hbVersion = (this.api.packageJSON as { version?: string })?.version ?? '0.0.0';
+      const hbMajor = parseInt(hbVersion.split('.')[0], 10);
       const matterAvailable = this.api.isMatterAvailable?.() ?? false;
+      const matterEnabled = this.api.isMatterEnabled?.() ?? false;
+
+      if (this.config.enableMatter) {
+        if (hbMajor < 2) {
+          this.log.warn(
+            '[Matter] Homebridge v2.0+ is required for Matter support (current: v%s). ' +
+            'Upgrade Homebridge to enable Matter accessories.',
+            hbVersion,
+          );
+        } else if (!matterAvailable) {
+          this.log.warn(
+            '[Matter] Matter is not available on this Homebridge installation. ' +
+            'Enable Matter in Homebridge Settings to use Matter accessories.',
+          );
+        } else if (!matterEnabled) {
+          this.log.warn(
+            '[Matter] Matter is installed but not enabled. ' +
+            'Enable it in Homebridge Settings → Matter.',
+          );
+        } else {
+          this.log.info('[Matter] Matter available and enabled (Homebridge v%s)', hbVersion);
+        }
+      }
 
       void this.initialize().then(() => {
-        if (matterAvailable && this.config.enableMatter) {
+        if (this.config.enableMatter && matterAvailable && matterEnabled) {
           void this.registerMatterAccessories();
         }
       });
-     });
+    });
    }
 
   configureAccessory(accessory: PlatformAccessory): void {
@@ -613,10 +638,6 @@ export class AuxCloudPlatform implements DynamicPlatformPlugin {
     }
 
     private async registerMatterAccessories(): Promise<void> {
-      if (!this.api.isMatterAvailable?.()) {
-        return;
-      }
-
       const allDevices = [...this.devicesById.values(), ...this.getLanOnlyDevices()];
       for (const device of allDevices) {
         const deviceConfig = this.config.devices?.find((d) => d.mac === device.mac);
