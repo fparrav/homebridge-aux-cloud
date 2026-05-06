@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.0.12-beta.17 - 2026-05-06
+
+## Fixes
+
+- **Temperatura actual**: Cambiado a `localTemperature` en el cluster thermostat. Antes se usaba `externalMeasuredIndoorTemperature` que requiere el feature `EXT` habilitado — HomeKit no lo mostraba correctamente.
+- **Tipo de dispositivo primario**: Agregado cluster `onOff` al endpoint padre del termostato. Esto hace que HomeKit reconozca el termostato como el dispositivo principal (termostato con switches) en lugar de mostrar los switches como control primario.
+
 ## v0.0.12-beta.16 - 2026-05-06
 
 ## Mejora: validación de prerequisitos antes de registrar Matter
