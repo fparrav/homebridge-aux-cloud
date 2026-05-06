@@ -48,7 +48,8 @@ type MatterHandlerCallback =
   | ((request: { systemMode: number }) => Promise<void>);
 
 interface MatterAccessoryConfig {
-   [key: string]: unknown;
+  [key: string]: unknown;
+  id?: string;          // required for parts (nested accessories)
   UUID: string;
   displayName: string;
   deviceType: string;
@@ -372,6 +373,7 @@ export class MatterThermostatAccessory {
 
       const uuid = this.api.matter.uuid.generate(`matter-switch-${this.endpointId}-${m.key}`);
       switches.push({
+        id: uuid,         // required by Homebridge for parts (validates as part.id)
         UUID: uuid,
         displayName: `${this.device.friendlyName} - ${m.label}`,
         deviceType: this.api.matter.deviceTypes.OnOffSwitch,
