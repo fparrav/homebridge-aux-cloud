@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.0.12-beta.14 - 2026-05-06
+
+fix: soporte Node.js v24 en engines field — el container homebridge/homebridge:latest ahora usa Node 24
+
 ## v0.0.12-beta.13 - 2026-05-06
 
 ## Breaking fix — requiere reset del estado Matter en Homebridge
