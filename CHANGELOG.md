@@ -1,5 +1,17 @@
 # Changelog
 
+## v0.0.12-beta.16 - 2026-05-06
+
+## Mejora: validación de prerequisitos antes de registrar Matter
+
+Al arrancar, el plugin ahora valida explícitamente:
+
+1. **Homebridge v2.0+** — si la versión es anterior, loguea advertencia y omite Matter
+2. **Matter disponible** — si Matter no está instalado en Homebridge, loguea advertencia
+3. **Matter habilitado** — si Matter está instalado pero desactivado en Settings, loguea advertencia
+
+En vez de fallar silenciosamente o con errores crípticos, el log ahora dice exactamente qué falta configurar.
+
 ## v0.0.12-beta.15 - 2026-05-06
 
 fix: campo id requerido en switches como parts del termostato Matter (Homebridge valida part.id)
