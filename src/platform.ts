@@ -57,6 +57,8 @@ export interface AuxCloudPlatformConfig extends PlatformConfig {
     ip?: string;
     name?: string;
     controlStrategy?: 'local' | 'cloud';
+    enableHAP?: boolean;
+    enableMatter?: boolean;
    }>;
 }
 
@@ -184,17 +186,15 @@ export class AuxCloudPlatform implements DynamicPlatformPlugin {
         return;
        }
 
-      void this.initialize();
-
-       // Register Matter accessories if Matter is available and enabled
       const matterAvailable = typeof this.api.matter?.isMatterAvailable === 'function'
         ? this.api.matter.isMatterAvailable()
         : false;
-      if (matterAvailable && this.config.enableMatter) {
-        this.registerMatterAccessories();
-       }
 
-        // Unregister Matter accessories in onPlatformUnload hook (defined below)
+      void this.initialize().then(() => {
+        if (matterAvailable && this.config.enableMatter) {
+          this.registerMatterAccessories();
+        }
+      });
      });
    }
 
@@ -544,10 +544,12 @@ export class AuxCloudPlatform implements DynamicPlatformPlugin {
         const handler = new AuxCloudPlatformAccessory(this, accessory);
         handler.updateAccessory(mergedDevice);
 
-        if (this.enableHomeKit) {
-        this.accessories.push(accessory);
-        this.handlers.set(accessory.UUID, handler);
-        this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
+        const deviceConfig = this.config.devices?.find((d) => d.mac === mergedDevice.mac);
+        const hapEnabled = this.enableHomeKit && (deviceConfig?.enableHAP !== false);
+        if (hapEnabled) {
+          this.accessories.push(accessory);
+          this.handlers.set(accessory.UUID, handler);
+          this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
         }
      }
       }
@@ -600,6 +602,8 @@ export class AuxCloudPlatform implements DynamicPlatformPlugin {
 
       const allDevices = [...this.devicesById.values(), ...this.getLanOnlyDevices()];
       for (const device of allDevices) {
+        const deviceConfig = this.config.devices?.find((d) => d.mac === device.mac);
+        if (deviceConfig?.enableMatter === false) continue;
         try {
           const matterAccessory = new MatterThermostatAccessory(this, device);
           this.matterAccessories.push(matterAccessory);
