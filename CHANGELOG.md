@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.0.12-beta.10 - 2026-05-06
+
+## Fixes
+
+- **Switch displayName**: reemplaza el em-dash `—` por hyphen ASCII ` - ` para evitar que la longitud en bytes supere el límite de 32 bytes del campo `productName` de Matter (el em-dash ocupa 3 bytes en UTF-8).
+- **Persistencia Matter**: Homebridge persiste el estado Matter entre reinicios. Al reiniciar, los accesorios ya existen en la caché y `registerPlatformAccessories` falla con *"already defined"*. Ahora se registra cada accesorio individualmente y ese error se trata como éxito (el accesorio está disponible), en vez de saltear el dispositivo del ciclo de polling.
+
 ## v0.0.12-beta.9 - 2026-05-06
 
 ## Fixes
