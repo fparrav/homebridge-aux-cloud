@@ -1,5 +1,17 @@
 # Changelog
 
+## v0.0.12-beta.7 - 2026-05-06
+
+## Fix crítico — Matter no registraba dispositivos
+
+**Root cause**: `isMatterAvailable()` y `isMatterEnabled()` son métodos en `HomebridgeAPI` (`api`), NO en `MatterAPIImpl` (`api.matter`). El código buscaba en el lugar equivocado, siempre evaluaba a `false`, y nunca llamaba `registerMatterAccessories()`.
+
+### Cambios
+- `src/platform.ts`: Cambia `this.api.matter?.isMatterAvailable()` → `this.api.isMatterAvailable?.()` en los dos lugares donde se verificaba
+- `src/matter.d.ts`: Mueve `isMatterAvailable?()` e `isMatterEnabled?()` de `MatterAPI` a `API` para reflejar la API real de Homebridge v2
+
+Este fix es necesario para que los accesorios Matter (termostatos de ACs) aparezcan en Apple Home, Google Home, etc. después de comisionar el hub.
+
 ## v0.0.12-beta.6 - 2026-05-06
 
 ## Fixes
