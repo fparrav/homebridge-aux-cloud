@@ -110,46 +110,25 @@ export class MatterThermostatAccessory {
       firmwareRevision: this.api.packageJSON?.version ?? '1.0.0',
       hardwareRevision: '1.0.0',
       clusters: {
-        onOff: {
-          onOff: this.getMatterOnOffState(),
-        },
-        fanControl: {
-          fanMode: this.getMatterFanMode(),
-          percentSetting: this.getMatterFanPercent(),
-          percentCurrent: this.getMatterFanPercent(),
-          fanModeSequence: 0,  // OffLowMedHigh (no AUT feature → Auto not allowed)
-         },
-        temperatureControl: {
+        thermostat: {
+          externalMeasuredIndoorTemperature: this.getMatterCurrentTemp(),
           occupiedHeatingSetpoint: this.getMatterHeatingSetpoint(),
           occupiedCoolingSetpoint: this.getMatterCoolingSetpoint(),
-          externalMeasuredIndoorTemperature: this.getMatterCurrentTemp(),
-        },
-        thermostat: {
+          minHeatSetpointLimit: 700,
+          maxHeatSetpointLimit: 3000,
+          minCoolSetpointLimit: 1600,
+          maxCoolSetpointLimit: 3200,
+          minSetpointDeadBand: 25,
+          controlSequenceOfOperation: 4,
           systemMode: this.getMatterSystemMode(),
-          externalMeasuredOccupancy: false,
-          minHeatSetpointLimit: 700, // 7.00°C
-          maxHeatSetpointLimit: 3000, // 30.00°C
-          minCoolSetpointLimit: 1600, // 16.00°C
-          maxCoolSetpointLimit: 3200, // 32.00°C
-          minSetpointDeadBand: 25, // 2.5°C
-          controlSequenceOfOperation: 4, // cooling and heating
+          externallyMeasuredOccupancy: false,
         },
       },
       handlers: {
-        onOff: {
-          onOffToggle: async () => this.handleOnOffToggle(),
-          onOffSet: async (request: { onOff: number }) => this.handleOnOffSet(request),
-        },
-        fanControl: {
-          fanModeChange: async (request: { fanMode: number; oldFanMode: number }) => this.handleFanModeChange(request),
-          percentSettingChange: async (request: { percentSetting: number; oldPercentSetting: number }) => this.handlePercentSettingChange(request),
-         },
-        temperatureControl: {
-          occupiedHeatingSetpointChange: async (request: { occupiedHeatingSetpoint: number }) => this.handleHeatingSetpointChange(request),
-          occupiedCoolingSetpointChange: async (request: { occupiedCoolingSetpoint: number }) => this.handleCoolingSetpointChange(request),
-        },
         thermostat: {
           systemModeChange: async (request: { systemMode: number }) => this.handleSystemModeChange(request),
+          occupiedHeatingSetpointChange: async (request: { occupiedHeatingSetpoint: number }) => this.handleHeatingSetpointChange(request),
+          occupiedCoolingSetpointChange: async (request: { occupiedCoolingSetpoint: number }) => this.handleCoolingSetpointChange(request),
         },
       },
     } as MatterAccessoryConfig;
@@ -459,47 +438,23 @@ export class MatterThermostatAccessory {
       const updated = this.platform.getDevice(this.endpointId);
       if (updated) {
         this.device = updated;
-        // Update Matter state
-        await this.api.matter.updateAccessoryState(
-          this.toAccessory().UUID,
-          'onOff',
-          { onOff: this.getMatterOnOffState() },
-        );
-        await this.api.matter.updateAccessoryState(
-          this.toAccessory().UUID,
-          'fanControl',
-          {
-            fanMode: this.getMatterFanMode(),
-            percentSetting: this.getMatterFanPercent(),
-            percentCurrent: this.getMatterFanPercent(),
-          },
-        );
-        await this.api.matter.updateAccessoryState(
-          this.toAccessory().UUID,
-          'temperatureControl',
-          {
-            occupiedHeatingSetpoint: this.getMatterHeatingSetpoint(),
-            occupiedCoolingSetpoint: this.getMatterCoolingSetpoint(),
-            externalMeasuredIndoorTemperature: this.getMatterCurrentTemp(),
-          },
-        );
-        await this.api.matter.updateAccessoryState(
-          this.toAccessory().UUID,
-          'thermostat',
-          {
-            systemMode: this.getMatterSystemMode(),
-          },
-        );
+        const uuid = this.toAccessory().UUID;
+
+        await this.api.matter.updateAccessoryState(uuid, 'thermostat', {
+          externalMeasuredIndoorTemperature: this.getMatterCurrentTemp(),
+          occupiedHeatingSetpoint: this.getMatterHeatingSetpoint(),
+          occupiedCoolingSetpoint: this.getMatterCoolingSetpoint(),
+          systemMode: this.getMatterSystemMode(),
+        });
 
         // Update switch states — switches are parts of the thermostat, use partId
-        const thermostatUUID = this.toAccessory().UUID;
         const switchAccessories = this.getMatterSwitchAccessories();
         for (const sw of switchAccessories) {
           const partId = sw.UUID as string;
           const clusters = sw.clusters as Record<string, Record<string, unknown>>;
           const onOff = clusters?.onOff?.onOff as number;
           if (partId && onOff !== undefined) {
-            await this.api.matter.updateAccessoryState(thermostatUUID, 'onOff', { onOff }, partId);
+            await this.api.matter.updateAccessoryState(uuid, 'onOff', { onOff }, partId);
           }
         }
       }
