@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.0.12-beta.15 - 2026-05-06
+
+fix: campo id requerido en switches como parts del termostato Matter (Homebridge valida part.id)
+
 ## v0.0.12-beta.14 - 2026-05-06
 
 fix: soporte Node.js v24 en engines field — el container homebridge/homebridge:latest ahora usa Node 24
