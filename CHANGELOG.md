@@ -1,5 +1,20 @@
 # Changelog
 
+## v0.0.12-beta.6 - 2026-05-06
+
+## Fixes
+
+- **fix: race condition Matter** — `registerMatterAccessories()` ahora corre después de que `initialize()` resuelve, así que `devicesById` está poblado cuando se registran los accesorios Matter. Antes se registraban 0 dispositivos siempre.
+- **fix: loop recursivo en refresh()** — `MatterThermostatAccessory.refresh()` ya no llama `refreshDevices()` (que a su vez llamaba `refresh()` de vuelta). Ahora lee el estado con `getDevice()` directamente.
+
+## Nueva feature
+
+- **Per-device HAP/Matter toggles** — cada dispositivo en la lista `devices` de la configuración ahora acepta `enableHAP` (boolean, default `true`) y `enableMatter` (boolean, default `true`) para controlar individualmente si se registra en HomeKit vía HAP, en Matter, o en ambos.
+
+## Upgrade recomendado
+
+Si estás corriendo v0.0.11 con Homebridge v2, actualizá a esta versión. v0.0.11 crashea con `TypeError: this.api.matter?.isMatterAvailable is not a function` al iniciar, lo que impide que HAP y Matter funcionen.
+
 ## v0.0.12-beta.5 - 2026-05-05
 
 fix: guard isMatterAvailable correctly (typeof check), fix: push commits to origin before release so CI compiles the right code, feat: add enableHomeKit toggle to config schema UI
