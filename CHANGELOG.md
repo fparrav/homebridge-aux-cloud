@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.0.12-beta.9 - 2026-05-06
+
+## Fixes
+
+- **fanControl**: Default `fanMode` to `1` (Low) instead of `5` (Auto) — Matter spec rejects Auto when `AUT` feature flag is not declared (included in beta.8).
+- **Matter polling**: `registerPlatformAccessories` is now awaited before adding the accessory to the poll list. Previously, a failed registration still added the accessory to the poll cycle, causing `updateAccessoryState: not found or not registered` errors on every poll.
+
 ## v0.0.12-beta.8 - 2026-05-06
 
 fix: default fanMode to Low instead of Auto (AUT feature not declared in FanControl cluster)
