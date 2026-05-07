@@ -654,7 +654,7 @@ export class AuxCloudPlatform implements DynamicPlatformPlugin {
     }
 
     private async registerMatterAccessories(): Promise<void> {
-      const allDevices = [...this.devicesById.values(), ...this.getLanOnlyDevices()];
+      const allDevices = [...this.devicesById.values()];
       for (const device of allDevices) {
         const deviceConfig = this.config.devices?.find((d) => d.mac === device.mac);
         if (deviceConfig?.enableMatter === false) continue;
