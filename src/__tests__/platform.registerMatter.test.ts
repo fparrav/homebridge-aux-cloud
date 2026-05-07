@@ -7,7 +7,7 @@ function callRegisterOrResume(
   accessories: unknown[],
   deviceName: string,
 ): Promise<void> {
-  const method = (AuxCloudPlatform.prototype as unknown as Record<string, Function>)['registerOrResumeAccessories'];
+  const method = (AuxCloudPlatform.prototype as unknown as Record<string, (...args: unknown[]) => Promise<void>>)['registerOrResumeAccessories'];
   return method.call(context, accessories, deviceName) as Promise<void>;
 }
 
