@@ -1,5 +1,25 @@
 # Changelog
 
+## v0.0.12-beta.25 - 2026-05-07
+
+## fix(matter): always call updatePlatformAccessories — beta.25
+
+### Diagnóstico confirmado
+`registerPlatformAccessories` es fire-and-forget: resuelve inmediatamente aunque Homebridge falle internamente con `identity-conflict`. El `accessories` Map (que usa `updateAccessoryState`) nunca se poblaba en reinicios posteriores.
+
+### Fix
+En la ruta non-cached, se llama AMBOS:
+1. `registerPlatformAccessories` — maneja primer boot (popula Map y cache)
+2. `updatePlatformAccessories` — maneja reinicios (endpoint ya persisted → popula Map con handlers actuales)
+
+El `configureMatterAccessory` se mantiene como optimización para cuando Homebridge lo llame correctamente (evita el `registerPlatformAccessories` innecesario).
+
+### Logs esperados al reiniciar
+```
+[Aux Cloud] [Matter] "Aire Sala" registered and updated
+```
+Sin errores `not found or not registered` en el refresh.
+
 ## v0.0.12-beta.24 - 2026-05-07
 
 ## fix(matter): implement configureMatterAccessory — beta.24
