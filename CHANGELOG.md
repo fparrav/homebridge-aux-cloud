@@ -1,5 +1,23 @@
 # Changelog
 
+## v0.0.12-beta.24 - 2026-05-07
+
+## fix(matter): implement configureMatterAccessory — beta.24
+
+### Root cause
+El plugin no implementaba `configureMatterAccessory()`, el callback de Homebridge 2.x que se llama al arrancar para cada endpoint Matter persistido (equivalente a `configureAccessory()` para HAP). Sin este callback, el plugin nunca sabía que el endpoint ya existía en StateManager, siempre intentaba `registerPlatformAccessories` (que fallaba con "already defined"), y los handlers de la sesión actual nunca se re-registraban.
+
+### Fix
+- **Añadido `configureMatterAccessory(accessory)`**: almacena el endpoint en `cachedMatterAccessories` Map al arrancar.
+- **`registerOrResumeAccessories` actualizado**: si el UUID está en cache → `updatePlatformAccessories` (re-attach de handlers, no toca StateManager); si es nuevo → `registerPlatformAccessories` (primera vez).
+- **`MatterAPI` type**: añadido `updatePlatformAccessories` a la declaración de tipos.
+
+### Expected logs on restart
+```
+[Matter] Restoring cached: Aire Sala (0454966e-...)
+[Matter] "Aire Sala" resumed — handlers re-attached
+```
+
 ## v0.0.12-beta.23 - 2026-05-07
 
 fix(matter): resume existing endpoint on 'already defined' without unregistering
