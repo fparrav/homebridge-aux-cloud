@@ -1,9 +1,7 @@
 import { AuxCloudPlatform } from '../platform';
 
-// Bind the private method from the class prototype to a minimal context object.
-// This lets us test the implementation without constructing the full platform.
 function callRegisterOrResume(
-  context: { log: unknown; api: unknown },
+  context: { log: unknown; api: unknown; cachedMatterAccessories: Map<string, unknown> },
   accessories: unknown[],
   deviceName: string,
 ): Promise<void> {
@@ -11,50 +9,96 @@ function callRegisterOrResume(
   return method.call(context, accessories, deviceName) as Promise<void>;
 }
 
-function makeContext(matterOverrides: {
+function makeContext(opts: {
+  cachedAccessories?: Record<string, unknown>;
   registerPlatformAccessories?: jest.Mock;
   unregisterPlatformAccessories?: jest.Mock;
+  updatePlatformAccessories?: jest.Mock;
 } = {}) {
+  const cachedMap = new Map<string, unknown>(Object.entries(opts.cachedAccessories ?? {}));
   return {
     log: { debug: jest.fn(), warn: jest.fn(), error: jest.fn(), info: jest.fn() },
     api: {
       matter: {
-        registerPlatformAccessories: matterOverrides.registerPlatformAccessories ?? jest.fn().mockResolvedValue(undefined),
-        unregisterPlatformAccessories: matterOverrides.unregisterPlatformAccessories ?? jest.fn().mockResolvedValue(undefined),
+        registerPlatformAccessories: opts.registerPlatformAccessories ?? jest.fn().mockResolvedValue(undefined),
+        unregisterPlatformAccessories: opts.unregisterPlatformAccessories ?? jest.fn().mockResolvedValue(undefined),
+        updatePlatformAccessories: opts.updatePlatformAccessories ?? jest.fn().mockResolvedValue(undefined),
       },
     },
+    cachedMatterAccessories: cachedMap,
   };
 }
 
-describe('AuxCloudPlatform.registerOrResumeAccessories — stale persistence recovery', () => {
-  test('unregisters and re-registers when Matter says "already defined"', async () => {
-    const mockUnregister = jest.fn().mockResolvedValue(undefined);
-    const mockRegister = jest.fn()
-      .mockRejectedValueOnce(new Error('[identity-conflict] 0ED982F8 already defined'))
-      .mockResolvedValueOnce(undefined);
-
-    const ctx = makeContext({ registerPlatformAccessories: mockRegister, unregisterPlatformAccessories: mockUnregister });
-    await callRegisterOrResume(ctx, [{ UUID: 'test-uuid' }], 'Aire Sala');
-
-    expect(mockUnregister).toHaveBeenCalledTimes(1);
-    expect(mockRegister).toHaveBeenCalledTimes(2);
-  });
-
-  test('does not unregister when registration succeeds on first attempt', async () => {
-    const mockUnregister = jest.fn();
+describe('AuxCloudPlatform.registerOrResumeAccessories', () => {
+  test('registers fresh when UUID not in cache', async () => {
     const mockRegister = jest.fn().mockResolvedValue(undefined);
+    const mockUpdate = jest.fn();
 
-    const ctx = makeContext({ registerPlatformAccessories: mockRegister, unregisterPlatformAccessories: mockUnregister });
-    await callRegisterOrResume(ctx, [{ UUID: 'test-uuid' }], 'Aire Sala');
+    const ctx = makeContext({ registerPlatformAccessories: mockRegister, updatePlatformAccessories: mockUpdate });
+    await callRegisterOrResume(ctx, [{ UUID: 'test-uuid', handlers: {}, parts: [] }], 'Aire Sala');
 
-    expect(mockUnregister).not.toHaveBeenCalled();
     expect(mockRegister).toHaveBeenCalledTimes(1);
+    expect(mockUpdate).not.toHaveBeenCalled();
   });
 
-  test('throws when registration fails with a non-identity error', async () => {
+  test('resumes via updatePlatformAccessories when UUID is in cache', async () => {
+    const mockRegister = jest.fn();
+    const mockUpdate = jest.fn().mockResolvedValue(undefined);
+
+    const cachedAccessory = { UUID: 'test-uuid', handlers: {}, parts: [] };
+    const ctx = makeContext({
+      cachedAccessories: { 'test-uuid': cachedAccessory },
+      registerPlatformAccessories: mockRegister,
+      updatePlatformAccessories: mockUpdate,
+    });
+
+    const newAcc = { UUID: 'test-uuid', handlers: { onSet: jest.fn() }, parts: [{ UUID: 'part-1' }] };
+    await callRegisterOrResume(ctx, [newAcc], 'Aire Sala');
+
+    expect(mockUpdate).toHaveBeenCalledTimes(1);
+    expect(mockUpdate).toHaveBeenCalledWith([cachedAccessory]);
+    expect(mockRegister).not.toHaveBeenCalled();
+    // Handlers and parts must be re-attached onto the cached object
+    expect((cachedAccessory as Record<string, unknown>).handlers).toBe(newAcc.handlers);
+    expect((cachedAccessory as Record<string, unknown>).parts).toBe(newAcc.parts);
+  });
+
+  test('throws when registerPlatformAccessories fails with non-identity error', async () => {
     const mockRegister = jest.fn().mockRejectedValue(new Error('[enum-value-conformance] conformance error'));
 
     const ctx = makeContext({ registerPlatformAccessories: mockRegister });
-    await expect(callRegisterOrResume(ctx, [{ UUID: 'test-uuid' }], 'Aire Sala')).rejects.toThrow('conformance error');
+    await expect(callRegisterOrResume(ctx, [{ UUID: 'new-uuid' }], 'Aire Sala')).rejects.toThrow('conformance error');
+  });
+
+  test('throws when updatePlatformAccessories fails', async () => {
+    const mockUpdate = jest.fn().mockRejectedValue(new Error('update failed'));
+    const cachedAccessory = { UUID: 'test-uuid' };
+    const ctx = makeContext({
+      cachedAccessories: { 'test-uuid': cachedAccessory },
+      updatePlatformAccessories: mockUpdate,
+    });
+
+    await expect(callRegisterOrResume(ctx, [{ UUID: 'test-uuid' }], 'Aire Sala')).rejects.toThrow('update failed');
+  });
+
+  test('processes each accessory independently (mix of cached and new)', async () => {
+    const mockRegister = jest.fn().mockResolvedValue(undefined);
+    const mockUpdate = jest.fn().mockResolvedValue(undefined);
+    const cachedAccessory = { UUID: 'uuid-cached' };
+
+    const ctx = makeContext({
+      cachedAccessories: { 'uuid-cached': cachedAccessory },
+      registerPlatformAccessories: mockRegister,
+      updatePlatformAccessories: mockUpdate,
+    });
+
+    await callRegisterOrResume(
+      ctx,
+      [{ UUID: 'uuid-cached' }, { UUID: 'uuid-new' }],
+      'Test Device',
+    );
+
+    expect(mockUpdate).toHaveBeenCalledTimes(1);
+    expect(mockRegister).toHaveBeenCalledTimes(1);
   });
 });

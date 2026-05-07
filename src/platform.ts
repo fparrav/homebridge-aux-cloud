@@ -115,6 +115,9 @@ export class AuxCloudPlatform implements DynamicPlatformPlugin {
     // Matter accessory instances
   private readonly matterAccessories: MatterThermostatAccessory[] = [];
 
+  // Cache of Matter accessories restored from persistence at startup (UUID → accessory)
+  private readonly cachedMatterAccessories = new Map<string, unknown>();
+
   constructor(
     public readonly log: Logger,
     config: PlatformConfig,
@@ -238,6 +241,12 @@ export class AuxCloudPlatform implements DynamicPlatformPlugin {
       this.handlers.set(accessory.UUID, handler);
      }
    }
+
+  configureMatterAccessory(accessory: unknown): void {
+    const acc = accessory as { UUID: string; displayName: string };
+    this.log.debug('[Matter] Restoring cached: %s (%s)', acc.displayName, acc.UUID);
+    this.cachedMatterAccessories.set(acc.UUID, accessory);
+  }
 
   public getDevice(endpointId: string): AuxDevice | undefined {
     return this.devicesById.get(endpointId);
@@ -623,23 +632,18 @@ export class AuxCloudPlatform implements DynamicPlatformPlugin {
       deviceName: string,
     ): Promise<void> {
       for (const acc of accessories) {
-        try {
+        const uuid = (acc as { UUID: string }).UUID;
+        const cached = this.cachedMatterAccessories.get(uuid);
+        if (cached) {
+          // Re-attach handlers to the endpoint already in StateManager from persistence.
+          // updatePlatformAccessories does NOT touch StateManager — safe to call at runtime.
+          (cached as Record<string, unknown>).handlers = (acc as Record<string, unknown>).handlers;
+          (cached as Record<string, unknown>).parts = (acc as Record<string, unknown>).parts;
+          await this.api.matter.updatePlatformAccessories([cached]);
+          this.log.info('[Matter] "%s" resumed — handlers re-attached', deviceName);
+        } else {
           await this.api.matter.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [acc]);
-        } catch (error) {
-          const message = error instanceof Error ? error.message : String(error);
-          if (message.includes('already defined')) {
-            // Stale entry in Matter persistence (e.g. from a previous failed transaction rollback).
-            // Unregister the broken endpoint and re-register fresh so it initializes correctly.
-            this.log.debug('[Matter] "%s" stale in persistence — unregistering and re-registering fresh', deviceName);
-            try {
-              await this.api.matter.unregisterPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [acc]);
-            } catch {
-              // If unregister fails, proceed anyway — registration attempt will follow
-            }
-            await this.api.matter.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [acc]);
-          } else {
-            throw error;
-          }
+          this.log.info('[Matter] "%s" registered fresh', deviceName);
         }
       }
     }
