@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.0.12-beta.27 - 2026-05-07
+
+fix(matter): remove updatePlatformAccessories from fresh-register path
+
+updatePlatformAccessories overwrites the internalAccessory (which finalizeAccessoryRegistration stores with a live endpoint) with our plain thermostat object (no endpoint). This caused updateAccessoryState to fail with 'not found or not registered' on every poll cycle. finalizeAccessoryRegistration already correctly populates the accessories Map — no second call needed.
+
 ## v0.0.12-beta.26 - 2026-05-07
 
 fix(matter): remove duplicate LAN device registration
