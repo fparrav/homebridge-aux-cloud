@@ -123,8 +123,11 @@ export class MatterThermostatAccessory {
           controlSequenceOfOperation: 4,
           systemMode: this.getMatterSystemMode(),
         },
-        onOff: {
-          onOff: this.getMatterOnOffState(),
+        fanControl: {
+          fanMode: this.getMatterFanMode(),
+          fanModeSequence: 2,
+          percentSetting: this.getMatterFanPercent(),
+          percentCurrent: this.getMatterFanPercent(),
         },
       },
       handlers: {
@@ -133,8 +136,9 @@ export class MatterThermostatAccessory {
           occupiedHeatingSetpointChange: async (request: { occupiedHeatingSetpoint: number }) => this.handleHeatingSetpointChange(request),
           occupiedCoolingSetpointChange: async (request: { occupiedCoolingSetpoint: number }) => this.handleCoolingSetpointChange(request),
         },
-        onOff: {
-          onOffSet: async (request: { onOff: number }) => this.handleOnOffSet(request),
+        fanControl: {
+          fanModeChange: async (request: { fanMode: number; oldFanMode: number }) => this.handleFanModeChange(request),
+          percentSettingChange: async (request: { percentSetting: number; oldPercentSetting: number }) => this.handlePercentSettingChange(request),
         },
       },
     } as MatterAccessoryConfig;
@@ -143,21 +147,6 @@ export class MatterThermostatAccessory {
   // ─────────────────────────────────────────────
   // Matter handler implementations
   // ─────────────────────────────────────────────
-
-  private async handleOnOffSet(request: { onOff: number }): Promise<void> {
-    if (!this.device) return;
-    const power = request.onOff === 1 ? AC_POWER_ON : AC_POWER_OFF;
-    this.log.info(`[Matter][${this.device.friendlyName}] Power: ${request.onOff === 1 ? 'ON' : 'OFF'}`);
-    await this.sendCommand(power);
-   }
-
-   private async handleOnOffToggle(): Promise<void> {
-    if (!this.device) return;
-    const isOn = this.getMatterOnOffState() === 1;
-    const power = isOn ? AC_POWER_OFF : AC_POWER_ON;
-    this.log.info(`[Matter][${this.device.friendlyName}] Power toggle: ${power === AC_POWER_ON ? 'ON' : 'OFF'}`);
-    await this.sendCommand(power);
-   }
 
   private async handleFanModeChange(request: { fanMode: number; oldFanMode: number }): Promise<void> {
     if (!this.device) return;
@@ -247,6 +236,16 @@ export class MatterThermostatAccessory {
     const modeName = modeNames[request.systemMode] ?? `Unknown (${request.systemMode})`;
     this.log.info(`[Matter][${this.device.friendlyName}] System mode: ${modeName} (${request.systemMode})`);
 
+    if (request.systemMode === 0) {
+      await this.sendCommand(AC_POWER_OFF);
+      return;
+    }
+
+    // Si el AC estaba apagado, encender antes de cambiar modo
+    if (this.getMatterOnOffState() === 0) {
+      await this.sendCommand(AC_POWER_ON);
+    }
+
     let auxMode: AuxAcModeValue;
     switch (request.systemMode) {
       case THERMOSTAT_MODE_COOL:
@@ -335,6 +334,8 @@ export class MatterThermostatAccessory {
 
   private getMatterSystemMode(): number {
     if (!this.device) return THERMOSTAT_MODE_AUTO;
+    const power = this.device.params?.[AC_POWER] ?? this.device.state;
+    if (power === 0) return 0; // Matter systemMode=0 → Off (Matter Spec § 9.1)
     const auxMode = this.device.params?.[AUX_MODE];
     if (auxMode === undefined) return THERMOSTAT_MODE_AUTO;
     switch (auxMode) {
@@ -427,11 +428,12 @@ export class MatterThermostatAccessory {
 
   private async sendCommand(payload: Record<string, number>): Promise<void> {
     if (!this.device) return;
-    try {
-      this.platform.startDeviceCommand(this.device, payload);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      this.log.error(`[Matter][${this.device.friendlyName}] Failed to send command: ${message}`);
+    const endpointId = this.endpointId;
+    const seq = this.platform.registerPendingCommand(endpointId);
+    this.platform.startDeviceCommand(this.device, payload);
+    if (seq !== null) {
+      const guardMs = this.platform.commandTimeoutMs * (this.platform.commandRetryCount + 1) + 3000;
+      setTimeout(() => this.platform.completePendingCommand(endpointId), guardMs);
     }
   }
 
@@ -454,8 +456,13 @@ export class MatterThermostatAccessory {
           systemMode: this.getMatterSystemMode(),
         });
 
-        await this.api.matter.updateAccessoryState(uuid, 'onOff', {
-          onOff: this.getMatterOnOffState(),
+        await this.api.matter.updateAccessoryState(uuid, 'fanControl', {
+          fanMode: this.getMatterFanMode(),
+          percentSetting: this.getMatterFanPercent(),
+          percentCurrent: this.getMatterFanPercent(),
+        }).catch((e: unknown) => {
+          const msg = e instanceof Error ? e.message : String(e);
+          this.log.debug(`[Matter][${this.device?.friendlyName}] fanControl refresh error: ${msg}`);
         });
 
         // Update switch states — switches are parts of the thermostat, use partId
