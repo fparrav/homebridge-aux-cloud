@@ -1,5 +1,20 @@
 # Changelog
 
+## v0.0.12-beta.18 - 2026-05-07
+
+## Cambios en v0.0.12-beta.18
+
+### fix(matter): fanControl cluster, state overwrite, y jerarquía de dispositivo
+
+**Problema 1 — Estado revertido por el poll**
+Los handlers de Matter no registraban el pending guard, por lo que el siguiente ciclo de poll sobreescribía los cambios enviados vía Apple Home o control remoto físico. Ahora `sendCommand()` registra y libera el guard con el mismo patrón que los handlers HAP (`registerPendingCommand` + `setTimeout completePendingCommand`).
+
+**Problema 2 — Dispositivo aparecía como "switch con thermostat"**
+El cluster `onOff` en un `deviceTypes.Thermostat` causaba que Homebridge Matter elevara el switch a nivel superior, invirtiendo la jerarquía. Se eliminó el cluster `onOff` del termostato principal. El apagado ahora se maneja vía `systemMode=0` (Matter Spec § 9.1): `getMatterSystemMode()` retorna 0 cuando el AC está apagado, y `handleSystemModeChange()` envía el comando de apagado/encendido según corresponda.
+
+**Problema 3 — Faltaba el cluster fanControl**
+`handleFanModeChange` y `handlePercentSettingChange` existían pero no estaban registrados. Se agregó el cluster `fanControl` (con `fanModeSequence=2`: Off/Low/Med/High/Auto) tanto en `toAccessory()` como en `refresh()`, exponiendo los controles de velocidad de fan en Apple Home.
+
 ## v0.0.12-beta.17 - 2026-05-06
 
 ## Fixes
