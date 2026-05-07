@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.0.12-beta.28 - 2026-05-07
+
+fix(matter): add presetTypes to thermostat cluster config for PRES feature — deviceTypes.Thermostat enables Preset (PRES) feature by default, making presetTypes a required attribute. Without it, conformance validation fails with [endpoint-behaviors] Behaviors have errors during registration.
+
 ## v0.0.12-beta.27 - 2026-05-07
 
 fix(matter): remove updatePlatformAccessories from fresh-register path
