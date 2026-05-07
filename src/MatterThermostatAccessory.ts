@@ -125,7 +125,7 @@ export class MatterThermostatAccessory {
         },
         fanControl: {
           fanMode: this.getMatterFanMode(),
-          fanModeSequence: 2,
+          fanModeSequence: 0, // 0 = OffLowMedHigh — no requiere feature AUT (2/3/4 la requieren)
           percentSetting: this.getMatterFanPercent(),
           percentCurrent: this.getMatterFanPercent(),
         },
