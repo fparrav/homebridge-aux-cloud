@@ -1,5 +1,22 @@
 # Changelog
 
+## v0.0.12-beta.23 - 2026-05-07
+
+fix(matter): resume existing endpoint on 'already defined' without unregistering
+
+Root cause identified: unregisterPlatformAccessories removes the endpoint from
+Homebridge's in-memory StateManager. The subsequent registerPlatformAccessories
+cannot re-add it to StateManager at runtime (StateManager is only populated from
+persistence at startup).
+
+When 'already defined' is received, the endpoint IS in StateManager (loaded from
+persistence at startup). The correct behavior is to treat it as a successful resume
+and NOT unregister — doing so destroys the StateManager entry irreversibly until
+the next restart.
+
+Added INFO-level logging to confirm which path (fresh register vs. resume) is taken
+on startup, aiding future diagnostics.
+
 ## v0.0.12-beta.22 - 2026-05-07
 
 fix(matter): always unregister before register to reliably add endpoint to StateManager
