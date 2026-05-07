@@ -25,6 +25,7 @@ declare module 'homebridge' {
       platformName: string,
       accessories: unknown[],
     ): Promise<void>;
+    updatePlatformAccessories(accessories: unknown[]): Promise<void>;
     updateAccessoryState(
       uuid: string,
       cluster: string,
