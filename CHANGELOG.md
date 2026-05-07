@@ -1,5 +1,30 @@
 # Changelog
 
+## v0.0.12-beta.19 - 2026-05-07
+
+## Cambios en v0.0.12-beta.19
+
+### fix(matter): fanModeSequence=0 para evitar error de conformance AUT
+
+**Problema:** El dispositivo no se registraba en Matter con el error:
+```
+[enum-value-conformance] fanControl.state.fanModeSequence: Conformance "[AUT].b":
+Matter does not allow enum value OffLowMedHighAuto (ID 2) here
+```
+
+**Causa:** `fanModeSequence=2` (OffLowMedHighAuto) requiere el feature flag `AUT` declarado en el cluster FanControl (Matter Spec § 4.4.6.2). Sin declararlo, Homebridge Matter rechaza el cluster en la inicialización y el dispositivo no se registra.
+
+**Fix:** Se cambió a `fanModeSequence=0` (OffLowMedHigh), que cubre Off/Low/Med/High sin requerir el feature AUT. El fanMode=5 (Auto) tampoco se usa ya que `getMatterFanMode()` nunca retorna 5 sin el feature flag.
+
+### feat: infraestructura de tests (Jest + ts-jest)
+
+- Configuración de Jest con ts-jest para tests TypeScript
+- 5 tests unitarios para `MatterThermostatAccessory.toAccessory()`:
+  - `fanModeSequence` no usa valores que requieren AUT (2, 3, 4)
+  - Cluster `fanControl` presente y handlers conectados
+  - Cluster `onOff` ausente del thermostat (power via `systemMode=0`)
+  - `systemMode=0` cuando `pwr=0` en el dispositivo
+
 ## v0.0.12-beta.18 - 2026-05-07
 
 ## Cambios en v0.0.12-beta.18
