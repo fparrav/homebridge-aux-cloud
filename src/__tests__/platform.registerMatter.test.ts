@@ -30,15 +30,16 @@ function makeContext(opts: {
 }
 
 describe('AuxCloudPlatform.registerOrResumeAccessories', () => {
-  test('registers fresh when UUID not in cache', async () => {
+  test('registers fresh when UUID not in cache: calls register then update', async () => {
     const mockRegister = jest.fn().mockResolvedValue(undefined);
-    const mockUpdate = jest.fn();
+    const mockUpdate = jest.fn().mockResolvedValue(undefined);
 
     const ctx = makeContext({ registerPlatformAccessories: mockRegister, updatePlatformAccessories: mockUpdate });
     await callRegisterOrResume(ctx, [{ UUID: 'test-uuid', handlers: {}, parts: [] }], 'Aire Sala');
 
+    // Non-cached path: BOTH register (fresh/identity-conflict) AND update (populate accessories Map)
     expect(mockRegister).toHaveBeenCalledTimes(1);
-    expect(mockUpdate).not.toHaveBeenCalled();
+    expect(mockUpdate).toHaveBeenCalledTimes(1);
   });
 
   test('resumes via updatePlatformAccessories when UUID is in cache', async () => {
@@ -98,7 +99,9 @@ describe('AuxCloudPlatform.registerOrResumeAccessories', () => {
       'Test Device',
     );
 
-    expect(mockUpdate).toHaveBeenCalledTimes(1);
+    // Cached path (uuid-cached): update called once (no register)
+    // Non-cached path (uuid-new): register + update both called
+    expect(mockUpdate).toHaveBeenCalledTimes(2);
     expect(mockRegister).toHaveBeenCalledTimes(1);
   });
 });
