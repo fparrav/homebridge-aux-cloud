@@ -642,13 +642,11 @@ export class AuxCloudPlatform implements DynamicPlatformPlugin {
           await this.api.matter.updatePlatformAccessories([cached]);
           this.log.info('[Matter] "%s" resumed — handlers re-attached', deviceName);
         } else {
-          // registerPlatformAccessories is fire-and-forget: always resolves, fails internally
-          // with identity-conflict for persisted endpoints (no throw). Then updatePlatformAccessories
-          // ensures the accessories Map has the entry with current handlers, whether the endpoint
-          // was just freshly registered or already existed from persistence.
+          // registerPlatformAccessories → finalizeAccessoryRegistration stores internalAccessory
+          // WITH live endpoint in accessories Map. Do NOT call updatePlatformAccessories here:
+          // it would overwrite that entry with our plain object (no endpoint), breaking updateAccessoryState.
           await this.api.matter.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [acc]);
-          await this.api.matter.updatePlatformAccessories([acc]);
-          this.log.info('[Matter] "%s" registered and updated', deviceName);
+          this.log.info('[Matter] "%s" registered fresh', deviceName);
         }
       }
     }
