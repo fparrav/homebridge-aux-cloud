@@ -244,7 +244,7 @@ export class AuxCloudPlatform implements DynamicPlatformPlugin {
 
   configureMatterAccessory(accessory: unknown): void {
     const acc = accessory as { UUID: string; displayName: string };
-    this.log.debug('[Matter] Restoring cached: %s (%s)', acc.displayName, acc.UUID);
+    this.log.info('[Matter] Restoring cached: %s (%s)', acc.displayName, acc.UUID);
     this.cachedMatterAccessories.set(acc.UUID, accessory);
   }
 
@@ -642,8 +642,13 @@ export class AuxCloudPlatform implements DynamicPlatformPlugin {
           await this.api.matter.updatePlatformAccessories([cached]);
           this.log.info('[Matter] "%s" resumed — handlers re-attached', deviceName);
         } else {
+          // registerPlatformAccessories is fire-and-forget: always resolves, fails internally
+          // with identity-conflict for persisted endpoints (no throw). Then updatePlatformAccessories
+          // ensures the accessories Map has the entry with current handlers, whether the endpoint
+          // was just freshly registered or already existed from persistence.
           await this.api.matter.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [acc]);
-          this.log.info('[Matter] "%s" registered fresh', deviceName);
+          await this.api.matter.updatePlatformAccessories([acc]);
+          this.log.info('[Matter] "%s" registered and updated', deviceName);
         }
       }
     }
