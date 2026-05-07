@@ -628,8 +628,15 @@ export class AuxCloudPlatform implements DynamicPlatformPlugin {
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error);
           if (message.includes('already defined')) {
-            // Accessory is persisted from a previous session — still available, not a real error
-            this.log.debug('[Matter] "%s" already registered (resuming from persistence)', deviceName);
+            // Stale entry in Matter persistence (e.g. from a previous failed transaction rollback).
+            // Unregister the broken endpoint and re-register fresh so it initializes correctly.
+            this.log.debug('[Matter] "%s" stale in persistence — unregistering and re-registering fresh', deviceName);
+            try {
+              await this.api.matter.unregisterPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [acc]);
+            } catch {
+              // If unregister fails, proceed anyway — registration attempt will follow
+            }
+            await this.api.matter.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [acc]);
           } else {
             throw error;
           }
