@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.0.12-beta.26 - 2026-05-07
+
+fix(matter): remove duplicate LAN device registration
+
+Root cause of 'Accessory not found or not registered' errors on every poll cycle.
+
+getLanOnlyDevices() returns objects already in devicesById after reconcileAccessories runs. Including it in registerMatterAccessories caused registerOrResumeAccessories to be called twice for the same UUID — the second call triggered an identity-conflict cascade that corrupted the accessories Map and caused updateAccessoryState to fail.
+
 ## v0.0.12-beta.25 - 2026-05-07
 
 ## fix(matter): always call updatePlatformAccessories — beta.25
