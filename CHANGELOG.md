@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.0.12-beta.21 - 2026-05-07
+
+fix(matter): re-register stale Matter endpoint from broken persistence
+
+Causa: tras el rollback del transaction de beta.18, el UUID quedaba en la DB de Matter pero el endpoint no era funcional. Cada poll fallaba con 'Accessory not found or not registered'.
+
+Fix: cuando registerPlatformAccessories lanza 'already defined', se desregistra el endpoint obsoleto y se re-registra fresh.
+
 ## v0.0.12-beta.19 - 2026-05-07
 
 ## Cambios en v0.0.12-beta.19
