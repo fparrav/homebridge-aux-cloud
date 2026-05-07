@@ -1,5 +1,17 @@
 # Changelog
 
+## v0.0.12-beta.22 - 2026-05-07
+
+fix(matter): always unregister before register to reliably add endpoint to StateManager
+
+The previous unregister+re-register recovery on 'already defined' removed the endpoint
+from Homebridge's in-memory StateManager but the subsequent re-registration did not
+restore it reliably, causing 'Accessory not found or not registered' on every poll cycle.
+
+New approach: always unregister first (silent catch if not previously registered),
+then register fresh. This guarantees StateManager is updated via the normal registration
+path rather than the broken recovery path.
+
 ## v0.0.12-beta.21 - 2026-05-07
 
 fix(matter): re-register stale Matter endpoint from broken persistence
