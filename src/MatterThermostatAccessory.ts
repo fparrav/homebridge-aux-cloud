@@ -122,9 +122,7 @@ export class MatterThermostatAccessory {
           minSetpointDeadBand: 25,
           controlSequenceOfOperation: 4,
           systemMode: this.getMatterSystemMode(),
-          // Required when PRES (Preset) feature is enabled in deviceTypes.Thermostat.
-          // Empty list = preset feature enabled but no preset types defined yet.
-          presetTypes: [],
+          thermostatRunningMode: 0, // 0 = Off (required when AUTO feature is enabled)
         },
         fanControl: {
           fanMode: this.getMatterFanMode(),
