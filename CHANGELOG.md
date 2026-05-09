@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.0.12-beta.31 - 2026-05-09
+
+Fix Matter spec compliance:
+- Agrega presetTypes: [0] para satisfacer constraint 1-7 items de Matter spec
+- Sin esto, la librería inicializa como [] y falla la validación del cluster thermostat
+
 ## v0.0.12-beta.30 - 2026-05-09
 
 ## Matter Registration Fix
