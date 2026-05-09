@@ -1,5 +1,18 @@
 # Changelog
 
+## v0.0.12-beta.29 - 2026-05-09
+
+## Matter Registration Fix
+
+- **Fix race condition**: `registerMatterAccessories()` now awaited inside `initialize().then()`, preventing "Accessory not found or not registered" errors caused by poll cycles starting MatterThermostatAccessory.refresh() before Matter finished registering accessories
+- **Capability-based detection**: Replaced broken `api.packageJSON` version parsing with `api.isMatterAvailable()` + `api.isMatterEnabled()` (following homebridge-roomba/august patterns)
+- **Dead code removed**: Eliminated `cachedMatterAccessories`, `configureMatterAccessory`, and the unreachable "resume path" in `registerOrResumeAccessories`
+- Simplified `registerOrResumeAccessories` → `registerMatterAccessoriesInternal` with single fresh-register path
+
+## Tests
+
+- Rewrote `platform.registerMatter.test.ts` for new single-path behavior (5 tests)
+
 ## v0.0.12-beta.28 - 2026-05-07
 
 fix(matter): add presetTypes to thermostat cluster config for PRES feature — deviceTypes.Thermostat enables Preset (PRES) feature by default, making presetTypes a required attribute. Without it, conformance validation fails with [endpoint-behaviors] Behaviors have errors during registration.
