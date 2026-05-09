@@ -115,8 +115,6 @@ export class AuxCloudPlatform implements DynamicPlatformPlugin {
     // Matter accessory instances
   private readonly matterAccessories: MatterThermostatAccessory[] = [];
 
-  // Cache of Matter accessories restored from persistence at startup (UUID → accessory)
-  private readonly cachedMatterAccessories = new Map<string, unknown>();
 
   constructor(
     public readonly log: Logger,
@@ -189,36 +187,28 @@ export class AuxCloudPlatform implements DynamicPlatformPlugin {
         return;
       }
 
-      const hbVersion = (this.api.packageJSON as { version?: string })?.version ?? '0.0.0';
-      const hbMajor = parseInt(hbVersion.split('.')[0], 10);
       const matterAvailable = this.api.isMatterAvailable?.() ?? false;
       const matterEnabled = this.api.isMatterEnabled?.() ?? false;
 
       if (this.config.enableMatter) {
-        if (hbMajor < 2) {
+        if (!matterAvailable) {
           this.log.warn(
-            '[Matter] Homebridge v2.0+ is required for Matter support (current: v%s). ' +
-            'Upgrade Homebridge to enable Matter accessories.',
-            hbVersion,
-          );
-        } else if (!matterAvailable) {
+             '[Matter] Matter is not available on this Homebridge installation. ' +
+             'Enable Matter in Homebridge Settings to use Matter accessories.',
+           );
+         } else if (!matterEnabled) {
           this.log.warn(
-            '[Matter] Matter is not available on this Homebridge installation. ' +
-            'Enable Matter in Homebridge Settings to use Matter accessories.',
-          );
-        } else if (!matterEnabled) {
-          this.log.warn(
-            '[Matter] Matter is installed but not enabled. ' +
-            'Enable it in Homebridge Settings → Matter.',
-          );
-        } else {
-          this.log.info('[Matter] Matter available and enabled (Homebridge v%s)', hbVersion);
-        }
-      }
+             '[Matter] Matter is installed but not enabled. ' +
+             'Enable it in Homebridge Settings → Matter.',
+           );
+         } else {
+          this.log.info('[Matter] Matter available and enabled (Homebridge v%s)', this.api.serverVersion);
+         }
+       }
 
-      void this.initialize().then(() => {
+      void this.initialize().then(async () => {
         if (this.config.enableMatter && matterAvailable && matterEnabled) {
-          void this.registerMatterAccessories();
+          await this.registerMatterAccessories();
         }
       });
     });
@@ -241,12 +231,6 @@ export class AuxCloudPlatform implements DynamicPlatformPlugin {
       this.handlers.set(accessory.UUID, handler);
      }
    }
-
-  configureMatterAccessory(accessory: unknown): void {
-    const acc = accessory as { UUID: string; displayName: string };
-    this.log.info('[Matter] Restoring cached: %s (%s)', acc.displayName, acc.UUID);
-    this.cachedMatterAccessories.set(acc.UUID, accessory);
-  }
 
   public getDevice(endpointId: string): AuxDevice | undefined {
     return this.devicesById.get(endpointId);
@@ -627,29 +611,31 @@ export class AuxCloudPlatform implements DynamicPlatformPlugin {
     // Matter accessory registration
     // ─────────────────────────────────────────────
 
-    private async registerOrResumeAccessories(
+    private async registerMatterAccessoriesInternal(
       accessories: unknown[],
       deviceName: string,
-    ): Promise<void> {
+     ): Promise<void> {
+       // Always unregister first to clear stale Matter-side state.
+       // This prevents the "already defined" identity-conflict that occurs when
+       // Matter has a persisted entry but the endpoint is broken (from a previous
+       // transaction rollback). The promise resolves even on error, so we can't
+       // detect the conflict — we must prevent it entirely.
       for (const acc of accessories) {
+        try {
+          await this.api.matter.unregisterPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [acc]);
+         } catch {
+           /* ignore — accessory may not exist in Matter */
+         }
+       }
+
+       // Register all accessories fresh
+      for (const acc of accessories) {
+        await this.api.matter.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [acc]);
         const uuid = (acc as { UUID: string }).UUID;
-        const cached = this.cachedMatterAccessories.get(uuid);
-        if (cached) {
-          // Re-attach handlers to the endpoint already in StateManager from persistence.
-          // updatePlatformAccessories does NOT touch StateManager — safe to call at runtime.
-          (cached as Record<string, unknown>).handlers = (acc as Record<string, unknown>).handlers;
-          (cached as Record<string, unknown>).parts = (acc as Record<string, unknown>).parts;
-          await this.api.matter.updatePlatformAccessories([cached]);
-          this.log.info('[Matter] "%s" resumed — handlers re-attached', deviceName);
-        } else {
-          // registerPlatformAccessories → finalizeAccessoryRegistration stores internalAccessory
-          // WITH live endpoint in accessories Map. Do NOT call updatePlatformAccessories here:
-          // it would overwrite that entry with our plain object (no endpoint), breaking updateAccessoryState.
-          await this.api.matter.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [acc]);
-          this.log.info('[Matter] "%s" registered fresh', deviceName);
-        }
-      }
-    }
+        this.log.info('[Matter] "%s" registered fresh (UUID: %s)', deviceName, uuid);
+       }
+     }
+
 
     private async registerMatterAccessories(): Promise<void> {
       const allDevices = [...this.devicesById.values()];
@@ -665,9 +651,9 @@ export class AuxCloudPlatform implements DynamicPlatformPlugin {
           if (switches.length > 0) {
             (thermostat as Record<string, unknown>).parts = switches;
           }
-          await this.registerOrResumeAccessories([thermostat], device.friendlyName);
+          await this.registerMatterAccessoriesInternal([thermostat], device.friendlyName);
 
-          // Only add to poll list after successful registration (or resume from persistence)
+          // Only add to poll list after successful registration
           this.matterAccessories.push(matterAccessory);
           this.log.info('[Matter] Registered "%s" (%d switches)', device.friendlyName, switches.length);
         } catch (error) {
