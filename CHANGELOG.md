@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.0.12-beta.32 - 2026-05-09
+
+fix(presetTypes): use proper PresetType object instead of plain number 0
+fix(thermostatRunningMode): dynamic state tracking in toAccessory() and refresh()
+chore: version bump to 0.0.12-beta.32
+
 ## v0.0.12-beta.31 - 2026-05-09
 
 Fix Matter spec compliance:
