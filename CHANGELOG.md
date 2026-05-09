@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.0.12-beta.30 - 2026-05-09
+
+## Matter Registration Fix
+
+- **Fixed behavior initialization error**: Added missing `thermostatRunningMode: 0` to thermostat cluster config. Homebridge Matter server requires this attribute when the AUTO feature is enabled. Without it, accessory registration fails with "[endpoint-behaviors] Behaviors have errors" and accessories are not registered.
+- **Removed unused `presetTypes`**: Empty array caused validation errors in Matter spec compliance.
+
 ## v0.0.12-beta.29 - 2026-05-09
 
 ## Matter Registration Fix
