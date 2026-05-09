@@ -118,7 +118,7 @@ export class MatterThermostatAccessory {
           minHeatSetpointLimit: 700,
           maxHeatSetpointLimit: 3000,
           minCoolSetpointLimit: 1600,
-          maxCoolSetpointLimit: 3200,
+          maxCoolSetpointLimit: 3199,
           minSetpointDeadBand: 25,
           controlSequenceOfOperation: 4,
           systemMode: this.getMatterSystemMode(),
