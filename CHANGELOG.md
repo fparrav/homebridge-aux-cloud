@@ -1,5 +1,20 @@
 # Changelog
 
+## v0.0.12-beta.33 - 2026-05-10
+
+## Changes
+
+- **Fix:** Expose Auto fan speed in HomeKit (fanModeSequence 0→5, OffLowMedHighAuto)
+- **Fix:** Pending guard in Matter state refresh prevents optimistic state overwrite
+- **Fix:** Switch serial numbers include feature label for HomeKit identification
+- **Fix:** Matter refresh skips when command is pending (prevents state revert)
+- Version bump to 0.0.12-beta.33
+
+## Context
+
+- beta.32 exposed Auto fan speed gap and state revert bug
+- Docker Swarm stack on rpi1, Homebridge 2.0.2
+
 ## v0.0.12-beta.32 - 2026-05-09
 
 fix(presetTypes): use proper PresetType object instead of plain number 0
