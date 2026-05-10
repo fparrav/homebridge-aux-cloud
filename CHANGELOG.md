@@ -1,5 +1,19 @@
 # Changelog
 
+## v0.0.12-beta.34 - 2026-05-10
+
+## Fix
+
+- **Fix:** Initial fanMode value causing Matter.js conformance error (beta.33 regression)
+  - fanMode initial value: Auto (5) → Low (1)
+  - fanModeSequence remains 5 (OffLowMedHighAuto) — Auto still exposed to HomeKit
+  - Fixes: '[endpoint-behaviors] Behaviors have errors' on accessory registration
+
+## Context
+
+- beta.33 exposed Auto fan speed but broke accessory registration
+- Matter.js validates initial fanMode against conformance rules
+
 ## v0.0.12-beta.33 - 2026-05-10
 
 ## Changes
