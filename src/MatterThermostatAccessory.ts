@@ -289,9 +289,9 @@ export class MatterThermostatAccessory {
   }
 
   private getMatterFanMode(): number {
-    if (!this.device) return 5; // Auto — allows HomeKit to control fan speed natively
+    if (!this.device) return 1; // Low — safe default, Auto exposed via fanModeSequence
     const fan = this.device.params?.[AC_FAN_SPEED];
-    if (fan === undefined) return 5; // Auto
+    if (fan === undefined) return 1; // Low
     switch (fan) {
       case AuxFanSpeed.MUTE: return 0; // Off
       case AuxFanSpeed.LOW: return 1; // Low
