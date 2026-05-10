@@ -694,8 +694,14 @@ export class AuxCloudPlatform implements DynamicPlatformPlugin {
 
     private refreshMatterState(): void {
       for (const matterAccessory of this.matterAccessories) {
+           // Skip Matter state refresh if there's a pending command — prevents
+           // overwriting optimistic state before the cloud confirms.
+        const dev = matterAccessory.getDevice();
+        if (dev && this.isStaleState(dev.endpointId)) {
+          continue;
+           }
         void matterAccessory.refresh();
-      }
+        }
     }
 
 }

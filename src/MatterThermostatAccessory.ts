@@ -131,7 +131,7 @@ export class MatterThermostatAccessory {
         },
         fanControl: {
           fanMode: this.getMatterFanMode(),
-          fanModeSequence: 0, // 0 = OffLowMedHigh — no requiere feature AUT (2/3/4 la requieren)
+          fanModeSequence: 5, // 5 = OffLowMedHighAuto — exposes Auto to HomeKit
           percentSetting: this.getMatterFanPercent(),
           percentCurrent: this.getMatterFanPercent(),
         },
@@ -289,16 +289,16 @@ export class MatterThermostatAccessory {
   }
 
   private getMatterFanMode(): number {
-    if (!this.device) return 1; // Low (safe default — Auto requires AUT feature flag)
+    if (!this.device) return 5; // Auto — allows HomeKit to control fan speed natively
     const fan = this.device.params?.[AC_FAN_SPEED];
-    if (fan === undefined) return 1; // Low
+    if (fan === undefined) return 5; // Auto
     switch (fan) {
       case AuxFanSpeed.MUTE: return 0; // Off
       case AuxFanSpeed.LOW: return 1; // Low
       case AuxFanSpeed.MEDIUM: return 2; // Medium
       case AuxFanSpeed.HIGH: return 3; // High
       case AuxFanSpeed.TURBO: return 3; // High (closest to Turbo)
-      default: return 1; // Low (Auto not valid without AUT feature)
+      default: return 5; // Auto — allows HomeKit to control fan speed natively
     }
   }
 
@@ -403,7 +403,7 @@ export class MatterThermostatAccessory {
         UUID: uuid,
         displayName: `${this.device.friendlyName} - ${m.label}`,
         deviceType: this.api.matter.deviceTypes.OnOffSwitch,
-        serialNumber: `${this.endpointId}-${m.key}`.slice(0, 32),
+        serialNumber: `${this.endpointId}-${m.key}-${m.label}`.slice(0, 32),
         manufacturer: 'AUX',
         model: `${AuxProducts.getDeviceName(this.device.productId) ?? 'AUX'} ${m.label}`.slice(0, 32),
         firmwareRevision: this.api.packageJSON?.version ?? '1.0.0',
@@ -463,6 +463,9 @@ export class MatterThermostatAccessory {
 
   async refresh(): Promise<void> {
     if (!this.device) return;
+       // Skip Matter refresh if there's a pending command — prevents
+       // overwriting optimistic state before the cloud confirms.
+    if (this.platform.isStaleState(this.endpointId)) return;
     try {
       const updated = this.platform.getDevice(this.endpointId);
       if (updated) {
