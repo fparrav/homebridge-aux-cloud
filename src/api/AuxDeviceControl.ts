@@ -258,7 +258,12 @@ export class AuxDeviceControl {
       newSession.authenticated = false;
     });
 
-    await this.doSessionAuth(newSession, ip, Buffer.from(mac.split(':').map((b) => parseInt(b, 16))));
+    try {
+      await this.doSessionAuth(newSession, ip, Buffer.from(mac.split(':').map((b) => parseInt(b, 16))));
+    } catch (err) {
+      try { socket.close(); } catch { /* ignore */ }
+      throw err;
+    }
 
     this.lanSessions.set(key, newSession);
     return newSession;
@@ -470,9 +475,11 @@ export class AuxDeviceControl {
 
       // --- getInfo (ambient temperature) ---
       const infoPacket = buildPacket(infoPayload, BroadlinkCommand.Packet, macBuf, session.id, session.count++, session.key);
+      let infoResolver!: (buf: Buffer) => void;
       const infoResponse = await new Promise<Buffer | null>((resolve) => {
         const timeout = setTimeout(() => resolve(null), 1500);
-        session.stateResolvers.push((msg) => { clearTimeout(timeout); resolve(msg); });
+        infoResolver = (msg) => { clearTimeout(timeout); resolve(msg); };
+        session.stateResolvers.push(infoResolver);
         session.socket.send(infoPacket, 0, infoPacket.length, 80, ip);
         });
 
@@ -484,6 +491,9 @@ export class AuxDeviceControl {
           Object.assign(params, infoParams);
         }
       } else {
+        // Cleanup: remove orphaned resolver so it doesn't consume the next getState response
+        const idx = session.stateResolvers.indexOf(infoResolver);
+        if (idx !== -1) session.stateResolvers.splice(idx, 1);
         this.logger?.debug('[LAN] getInfo timeout for %s — ambient temp unavailable', ip);
       }
 
