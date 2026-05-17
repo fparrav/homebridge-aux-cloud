@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.0.12-beta.35 - 2026-05-17
+
+fix(lan): close UDP socket on auth failure to prevent event loop overload
+
+Root cause: when doSessionAuth times out (e.g. Dormitorio LAN unreachable), the UDP socket was leaked. After ~9 hours, 1,700+ open sockets caused libuv event loop overload on Raspberry Pi — UDP responses were processed after the 3 s timeout, making all LAN operations fail until restart.
+
+Fixes:
+- Close socket immediately on auth failure (primary fix)
+- Remove orphaned resolver from stateResolvers on getInfo timeout (secondary)
+
 ## v0.0.12-beta.34 - 2026-05-10
 
 ## Fix
