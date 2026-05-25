@@ -1,5 +1,17 @@
 # Changelog
 
+## v0.0.12-beta.48 - 2026-05-25
+
+### fix(matter): temperatura muestra 0.0°C — push de estado inicial tras registro
+
+`localTemperature` se mantenía en null/0.0°C hasta el primer ciclo de poll (30s) porque Matter carga el estado persistido al reiniciar y `externalMeasuredIndoorTemperature$Changed` no se disparaba durante la inicialización si el valor persistido era null.
+
+**Fix**: `refreshMatterState()` se llama inmediatamente al finalizar el registro de accesorios en `discoverAndRegisterDevices()`. Esto dispara `updateAccessoryState({externalMeasuredIndoorTemperature: X})` → evento `$Changed` → `#handleMeasuredTemperatureChange` → `localTemperature` actualizado antes de que Apple Home consulte el termostato.
+
+**Modos en Apple Home**: Apple Home solo renderiza Off/Auto/Cool/Heat. Los modos Dry (8) y Fan Only (7) existen en la spec Matter pero no se muestran en la UI de Apple Home — es una limitación del Home app, no del plugin.
+
+**Pasos de temperatura**: Los pasos de 0.5°C son el comportamiento estándar de Apple Home para termostatos Matter. Se puede cambiar a 1°C con `temperatureStep: 1` en la config del plugin.
+
 ## v0.0.12-beta.47 - 2026-05-25
 
 ### fix(matter): THERMOSTAT_MODE_DRY corregido (6→8), doble comando en fan y setpoints eliminado
