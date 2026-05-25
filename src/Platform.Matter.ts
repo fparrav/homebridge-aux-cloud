@@ -243,7 +243,7 @@ export class AuxCloudMatterPlatform implements DynamicPlatformPlugin, IAuxCloudP
     const allKnownDevices = [...this.devicesById.values()];
     for (const device of allKnownDevices) {
       const deviceConfig = this.config.devices?.find((d) => d.mac === device.mac);
-      if (deviceConfig?.enableMatter === false) continue;
+      if (deviceConfig?.bridge === 'HAP') continue;
       try {
         const matterAccessory = new MatterThermostatAccessory(this, device);
         const thermostat = matterAccessory.toAccessory();

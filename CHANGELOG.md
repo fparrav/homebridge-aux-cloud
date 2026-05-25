@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.0.12-beta.39 - 2026-05-25
+
+## refactor: reemplazar enableHAP/enableMatter per-device por campo bridge enum
+
+Los campos booleanos `enableHAP` y `enableMatter` por dispositivo eran mutuamente exclusivos pero se presentaban como dos checkboxes independientes, lo cual podía inducir a configuraciones contradictorias. Reemplazados por un único campo `bridge: "HAP" | "Matter"` (default `"HAP"`) que renderiza como select en la UI de Homebridge.
+
+Retrocompatible: dispositivos sin `bridge` definido usan HAP por defecto.
+
 ## v0.0.12-beta.38 - 2026-05-25
 
 ## fix: agregar peerDependencies para homebridge

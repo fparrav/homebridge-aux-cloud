@@ -484,7 +484,7 @@ export class AuxCloudHAPPlatform implements DynamicPlatformPlugin, IAuxCloudPlat
         handler.updateAccessory(mergedDevice);
 
         const deviceConfig = this.config.devices?.find((d) => d.mac === mergedDevice.mac);
-        const hapEnabled = this.enableHomeKit && (deviceConfig?.enableHAP !== false);
+        const hapEnabled = this.enableHomeKit && (deviceConfig?.bridge !== 'Matter');
         if (hapEnabled) {
           this.accessories.push(accessory);
           this.handlers.set(accessory.UUID, handler);

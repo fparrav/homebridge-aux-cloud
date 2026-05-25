@@ -45,8 +45,7 @@ export interface AuxCloudPlatformConfig extends PlatformConfig {
     ip?: string;
     name?: string;
     controlStrategy?: 'local' | 'cloud';
-    enableHAP?: boolean;
-    enableMatter?: boolean;
+    bridge?: 'HAP' | 'Matter';
   }>;
 }
 
