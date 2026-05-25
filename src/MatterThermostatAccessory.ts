@@ -121,6 +121,11 @@ export class MatterThermostatAccessory {
           minSetpointDeadBand: 25,
           controlSequenceOfOperation: 4,
           systemMode: this.getMatterSystemMode(),
+          // presetTypes constraint is "1 to 7" — must supply at least one entry or Matter.js
+          // initializes the attribute to [] which fails validation at registration time.
+          presetTypes: [{ presetScenario: 1, numberOfPresets: 1, presetTypeFeatures: {} }],
+          numberOfPresets: 1,
+          activePresetHandle: null,
         },
       },
       handlers: {

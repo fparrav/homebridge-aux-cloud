@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.0.12-beta.46 - 2026-05-25
+
+## fix(matter): thermostat falla al registrar — presetTypes constraint "1 to 7"
+
+La versión de Matter.js en uso declara `presetTypes` como atributo obligatorio del cluster Thermostat con constraint `"1 to 7"` (el array debe tener entre 1 y 7 elementos). Al eliminarlo en beta.44, Matter.js inicializaba el atributo con `[]` (longitud 0), lo que fallaba la validación en el momento del registro e impedía que el termostato se cargara. Devuelto con un preset válido mínimo: `[{ presetScenario: 1, numberOfPresets: 1, presetTypeFeatures: {} }]`.
+
 ## v0.0.12-beta.45 - 2026-05-25
 
 ## feat(matter): exposer fan como accesorio Fan (§ 9.2) independiente con slider de velocidad
