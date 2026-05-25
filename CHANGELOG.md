@@ -1,5 +1,18 @@
 # Changelog
 
+## v0.0.12-beta.49 - 2026-05-25
+
+## feat(proxy): modo mixto Matter+HAP — soporte por dispositivo via bridge:'HAP'
+
+Cuando `enableMatter: true` está activo globalmente pero un dispositivo tiene `bridge: 'HAP'` en su config, el dispositivo ahora aparece correctamente en HomeKit vía HAP en lugar de desaparecer.
+
+**Causa raíz**: El `AuxCloudPlatformProxy` usaba selección binaria de plataforma — solo Matter o solo HAP. Los dispositivos con `bridge: 'HAP'` eran ignorados por Matter y HAP nunca se iniciaba.
+
+**Cambios**:
+- `Platform.Proxy.ts`: cuando hay dispositivos con `bridge: 'HAP'`, instancia ambas plataformas en paralelo (Matter + HAP con `hapOnlyMode: true`)
+- `Platform.HAP.ts`: nuevo parámetro `hapOnlyMode` — solo procesa dispositivos con `bridge: 'HAP'`; los accessories de dispositivos Matter se limpian como stale automáticamente
+- `Platform.Matter.ts`: en modo mixto, omite el desregistro de accessories HAP cacheados — la plataforma HAP lo gestiona
+
 ## v0.0.12-beta.48 - 2026-05-25
 
 ### fix(matter): temperatura muestra 0.0°C — push de estado inicial tras registro
