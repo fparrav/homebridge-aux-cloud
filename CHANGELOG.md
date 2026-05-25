@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.0.12-beta.41 - 2026-05-25
+
+## fix(matter): localTemperature read-only, temperatureStep rounding, temperatureStep en IAuxCloudPlatform
+
+- **Bug crítico**: `localTemperature` es de solo lectura en la especificación Matter. Reemplazado por `externalMeasuredIndoorTemperature` en el estado inicial (`toAccessory()`) y en las actualizaciones de poll (`refresh()`). El valor se propaga automáticamente a `localTemperature`. Escribir en un atributo read-only causaba que Apple Home registrara el dispositivo como tipo incorrecto (switch en lugar de termostato/HVAC).
+- **Temperature step**: Los handlers `handleHeatingSetpointChange` y `handleCoolingSetpointChange` ahora redondean el setpoint recibido al `temperatureStep` configurado (0.5 o 1°C) antes de enviarlo al AC. Antes ignoraban la configuración y pasaban el valor raw de Apple Home.
+- **IAuxCloudPlatform**: Agregado `readonly temperatureStep: number` a la interfaz para que `MatterThermostatAccessory` pueda leer el step sin depender de la implementación concreta del platform.
+
 ## v0.0.12-beta.40 - 2026-05-25
 
 ## fix(matter): corregir fanModeSequence y etiquetas de feature switches

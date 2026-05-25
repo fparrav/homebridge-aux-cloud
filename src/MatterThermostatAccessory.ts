@@ -112,7 +112,7 @@ export class MatterThermostatAccessory {
       hardwareRevision: '1.0.0',
       clusters: {
         thermostat: {
-          localTemperature: this.getMatterCurrentTemp(),
+          externalMeasuredIndoorTemperature: this.getMatterCurrentTemp(),
           occupiedHeatingSetpoint: this.getMatterHeatingSetpoint(),
           occupiedCoolingSetpoint: this.getMatterCoolingSetpoint(),
           minHeatSetpointLimit: 700,
@@ -220,19 +220,21 @@ export class MatterThermostatAccessory {
 
   private async handleHeatingSetpointChange(request: { occupiedHeatingSetpoint: number }): Promise<void> {
     if (!this.device) return;
-    const celsius = request.occupiedHeatingSetpoint / 100;
+    const rawCelsius = request.occupiedHeatingSetpoint / 100;
+    const step = this.platform.temperatureStep;
+    const celsius = Math.round(rawCelsius / step) * step;
     this.log.info(`[Matter][${this.device.friendlyName}] Heating setpoint: ${celsius}°C`);
     await this.sendCommand({ [AC_TEMPERATURE_TARGET]: Math.round(celsius * 10) });
-    // Ensure mode is HEAT
     await this.sendCommand({ [AUX_MODE]: AuxAcModeValue.HEATING });
   }
 
   private async handleCoolingSetpointChange(request: { occupiedCoolingSetpoint: number }): Promise<void> {
     if (!this.device) return;
-    const celsius = request.occupiedCoolingSetpoint / 100;
+    const rawCelsius = request.occupiedCoolingSetpoint / 100;
+    const step = this.platform.temperatureStep;
+    const celsius = Math.round(rawCelsius / step) * step;
     this.log.info(`[Matter][${this.device.friendlyName}] Cooling setpoint: ${celsius}°C`);
     await this.sendCommand({ [AC_TEMPERATURE_TARGET]: Math.round(celsius * 10) });
-    // Ensure mode is COOL
     await this.sendCommand({ [AUX_MODE]: AuxAcModeValue.COOLING });
   }
 
@@ -473,7 +475,7 @@ export class MatterThermostatAccessory {
         const uuid = this.toAccessory().UUID;
 
         await this.api.matter.updateAccessoryState(uuid, 'thermostat', {
-          localTemperature: this.getMatterCurrentTemp(),
+          externalMeasuredIndoorTemperature: this.getMatterCurrentTemp(),
           occupiedHeatingSetpoint: this.getMatterHeatingSetpoint(),
           occupiedCoolingSetpoint: this.getMatterCoolingSetpoint(),
           systemMode: this.getMatterSystemMode(),

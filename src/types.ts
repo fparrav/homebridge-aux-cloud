@@ -53,6 +53,7 @@ export interface IAuxCloudPlatform {
   readonly api: API;
   readonly log: Logger;
   readonly featureSwitches: Set<FeatureSwitchKey>;
+  readonly temperatureStep: number;
   readonly commandTimeoutMs: number;
   readonly commandRetryCount: number;
   registerPendingCommand(endpointId: string): number | null;
