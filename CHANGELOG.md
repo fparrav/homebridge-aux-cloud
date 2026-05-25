@@ -1,5 +1,25 @@
 # Changelog
 
+## v0.0.12-beta.36 - 2026-05-25
+
+## refactor: Matter-first con HAP fallback (patrón Roomba)
+
+Separa la plataforma monolítica en clases especializadas con exclusión mutua:
+
+- **`AuxCloudMatterPlatform`** — Matter-first: toma control cuando Matter está disponible y habilitado, elimina accesorios HAP heredados automáticamente
+- **`AuxCloudHAPPlatform`** — HAP pura: fallback cuando Matter no está disponible o no está habilitado
+- **`AuxCloudPlatformProxy`** — Decide qué plataforma usar en `didFinishLaunching` basándose en `isMatterAvailable()` + `isMatterEnabled()` + `config.enableMatter`
+- **`types.ts`** — Tipos compartidos: `AuxCloudPlatformConfig`, `FeatureSwitchKey`, `IAuxCloudPlatform`
+
+### Problemas resueltos
+- mDNS conflicts por bridges HAP y Matter simultáneos
+- Matter server crash loop cada ~1-2 min
+- Competencia de estado entre HAP y Matter
+
+### Migración
+No se requieren cambios de config. El comportamiento por defecto es idéntico.  
+Para activar Matter: `"enableMatter": true` en la config del plugin.
+
 ## v0.0.12-beta.35 - 2026-05-17
 
 fix(lan): close UDP socket on auth failure to prevent event loop overload
