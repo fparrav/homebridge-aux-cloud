@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.0.12-beta.51 - 2026-05-25
+
+### fix(hap): eliminar warnings 'illegal value' en HeaterCooler al inicializar
+
+Al crear un accesorio HeaterCooler por primera vez, los valores HAP por defecto (HeatingThreshold=0, CoolingThreshold=10, RotationSpeed=0) violan los `minValue` configurados por el plugin (16°C y 20% respectivamente). Corregido con `updateValue()` justo después de `setProps()`.
+
 ## v0.0.12-beta.50 - 2026-05-25
 
 ## fix: incluir código de modo mixto Matter+HAP (faltó en beta.49)
