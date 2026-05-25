@@ -1,9 +1,9 @@
 import { MatterThermostatAccessory } from '../MatterThermostatAccessory';
 import type { AuxDevice } from '../api/AuxCloudClient';
-import type { AuxCloudPlatform } from '../platform';
+import type { IAuxCloudPlatform } from '../types';
 
 // Minimal mock: only the fields accessed by toAccessory() and friends
-function makePlatform(): AuxCloudPlatform {
+function makePlatform(): IAuxCloudPlatform {
   return {
     api: {
       matter: {
@@ -19,7 +19,7 @@ function makePlatform(): AuxCloudPlatform {
     startDeviceCommand: jest.fn(),
     registerPendingCommand: jest.fn().mockReturnValue(1),
     completePendingCommand: jest.fn(),
-  } as unknown as AuxCloudPlatform;
+  } as unknown as IAuxCloudPlatform;
 }
 
 function makeDevice(overrides: Partial<AuxDevice> = {}): AuxDevice {

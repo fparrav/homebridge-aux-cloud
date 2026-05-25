@@ -1,4 +1,4 @@
-import { AuxCloudPlatform } from '../platform';
+import { AuxCloudMatterPlatform } from '../Platform.Matter';
 import { PLUGIN_NAME, PLATFORM_NAME } from '../settings';
 
 function callRegisterMatterInternal(
@@ -6,7 +6,7 @@ function callRegisterMatterInternal(
   accessories: unknown[],
   deviceName: string,
 ): Promise<void> {
-  const method = (AuxCloudPlatform.prototype as unknown as Record<string, (...args: unknown[]) => Promise<void>>)['registerMatterAccessoriesInternal'];
+  const method = (AuxCloudMatterPlatform.prototype as unknown as Record<string, (...args: unknown[]) => Promise<void>>)['registerMatterAccessoriesInternal'];
   return method.call(context, accessories, deviceName) as Promise<void>;
 }
 

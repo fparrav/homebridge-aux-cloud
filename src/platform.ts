@@ -703,5 +703,7 @@ export class AuxCloudPlatform implements DynamicPlatformPlugin {
         void matterAccessory.refresh();
         }
     }
-
 }
+
+// Re-export IAuxCloudPlatform para compatibilidad forward
+export type { IAuxCloudPlatform } from './types';

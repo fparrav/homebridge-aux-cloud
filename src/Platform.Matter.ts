@@ -1,0 +1,586 @@
+import type {
+  API,
+  DynamicPlatformPlugin,
+  Logger,
+  PlatformAccessory,
+  PlatformConfig,
+} from 'homebridge';
+
+import { AuxApiError, AuxCloudClient, type AuxDevice } from './api/AuxCloudClient';
+import { AuxDeviceControl } from './api/AuxDeviceControl';
+import { MatterThermostatAccessory } from './MatterThermostatAccessory';
+import { PLATFORM_NAME, PLUGIN_NAME } from './settings';
+import {
+  ALLOWED_FEATURE_SWITCHES,
+  type AuxCloudPlatformConfig,
+  type FeatureSwitchKey,
+  type IAuxCloudPlatform,
+} from './types';
+
+export class AuxCloudMatterPlatform implements DynamicPlatformPlugin, IAuxCloudPlatform {
+  private readonly config: AuxCloudPlatformConfig;
+
+  public readonly client: AuxCloudClient;
+
+  public readonly deviceControl: AuxDeviceControl;
+
+  private readonly includeIds: Set<string>;
+
+  private readonly excludeIds: Set<string>;
+
+  private readonly credentialsConfigured: boolean;
+
+  public readonly temperatureUnit: 'C' | 'F';
+
+  public readonly temperatureStep: number;
+
+  public readonly featureSwitches: Set<FeatureSwitchKey>;
+
+  public readonly commandRetryCount: number;
+  public readonly commandTimeoutMs: number;
+  public readonly enableHomeKit: boolean;
+
+  private readonly devicesById = new Map<string, AuxDevice>();
+
+  // Track pending commands per device to avoid stale refresh overwriting optimistic state
+  private pendingCommands = new Map<
+    string,
+    { sequence: number; timestamp: number; expectedState: number }
+  >();
+
+  private isSyncing = false;
+
+  // Cache last known cloud devices for resilience when cloud is unreachable
+  private lastKnownCloudDevices: AuxDevice[] = [];
+
+  private refreshDebounce?: NodeJS.Timeout;
+
+  // Matter accessory instances
+  private readonly matterAccessories: MatterThermostatAccessory[] = [];
+
+  // HAP accessories buffered for removal when Matter takes control
+  private cachedHapAccessories: PlatformAccessory[] = [];
+
+  constructor(
+    public readonly log: Logger,
+    config: PlatformConfig,
+    public readonly api: API,
+  ) {
+    this.config = (config ?? {}) as AuxCloudPlatformConfig;
+    this.credentialsConfigured = Boolean(this.config.username && this.config.password);
+    if (!this.credentialsConfigured) {
+      this.log.info('AUX Cloud plugin is installed but not configured; skipping initialization until credentials are provided.');
+    }
+
+    this.includeIds = new Set(this.config.includeDeviceIds ?? []);
+    this.excludeIds = new Set(this.config.excludeDeviceIds ?? []);
+
+    this.temperatureUnit = this.config.temperatureUnit === 'F' ? 'F' : 'C';
+    const configuredStep = this.config.temperatureStep === 1 ? 1 : 0.5;
+    this.temperatureStep = this.temperatureUnit === 'F' ? 1 : configuredStep;
+    if (this.temperatureUnit === 'F' && configuredStep !== 1) {
+      this.log.debug('Using 1°F increments when displaying temperatures.');
+    }
+
+    const configuredFeatureSwitches = new Set(
+      (this.config.featureSwitches ?? []).filter((value): value is FeatureSwitchKey =>
+        ALLOWED_FEATURE_SWITCHES.includes(value as FeatureSwitchKey),
+      ),
+    );
+    this.featureSwitches = configuredFeatureSwitches;
+
+    // HomeKit registration toggle (default true — disabled Matter only mode)
+    this.enableHomeKit = this.config.enableHomeKit !== false;
+
+    // Retry / timeout config
+    this.commandRetryCount =
+      this.config.commandRetryCount !== undefined && this.config.commandRetryCount >= 0
+        ? Math.min(this.config.commandRetryCount, 5)
+        : 2;
+    this.commandTimeoutMs =
+      this.config.commandTimeoutMs !== undefined
+        ? Math.max(1000, Math.min(15000, this.config.commandTimeoutMs))
+        : 5000;
+
+    // Create the client with custom timeout
+    this.client = new AuxCloudClient({
+      region: this.config.region ?? 'eu',
+      logger: this.log,
+      requestTimeoutMs: this.commandTimeoutMs,
+    });
+
+    // Device control with local/cloud selection — share the platform's logged-in client
+    this.deviceControl = new AuxDeviceControl({
+      region: this.config.region ?? 'eu',
+      logger: this.log,
+      commandTimeoutMs: this.commandTimeoutMs,
+      commandRetryCount: this.commandRetryCount,
+      localControlEnabled: this.config.localControlEnabled,
+      devices: this.config.devices,
+      cloudClient: this.client,
+    });
+
+    this.log.debug(
+      'Finished initializing platform: %s (retryCount=%d, timeout=%dms)',
+      this.config.name,
+      this.commandRetryCount,
+      this.commandTimeoutMs,
+    );
+  }
+
+  configureAccessory(accessory: PlatformAccessory): void {
+    // DIFFERENT from HAP: buffer for removal — Matter takes full control
+    // Legacy HAP accessories from a previous boot will be unregistered once Matter registers
+    this.cachedHapAccessories.push(accessory);
+    this.log.debug('[Matter] Buffering legacy HAP accessory for removal: %s', accessory.displayName);
+  }
+
+  // ─────────────────────────────────────────────
+  // Public entry point — called by the proxy
+  // ─────────────────────────────────────────────
+
+  public async initialize(): Promise<void> {
+    if (!this.credentialsConfigured) return;
+
+    if (this.config.localControlEnabled) {
+      const { DeviceDiscovery } = await import('./api/broadlink/DeviceDiscovery');
+      const devicesWithStaticIp = (this.config.devices ?? []).filter((d) => d.ip && d.mac);
+      try {
+        const discovered = await DeviceDiscovery.discover(3000);
+        if (discovered.length === 0 && devicesWithStaticIp.length === 0) {
+          throw new Error('LAN discovery found no Broadlink devices and no static IP/MAC configured. Check your network or disable localControlEnabled.');
+        }
+        for (const dev of discovered) {
+          this.deviceControl.registerDiscoveredDevice(dev);
+          this.log.info('Discovered Broadlink device: %s (MAC: %s)', dev.ip, dev.mac);
+        }
+        if (discovered.length === 0) {
+          this.log.warn('[Aux Cloud] LAN discovery found no devices via broadcast. Using static IP/MAC from config.');
+        }
+      } catch (error) {
+        if (devicesWithStaticIp.length === 0) {
+          throw error;
+        }
+        this.log.warn('[Aux Cloud] LAN discovery broadcast failed (%s). Using static IP/MAC from config.', error);
+      }
+    }
+
+    await this.discoverAndRegisterDevices();
+
+    const intervalSeconds = this.validatePollInterval(this.config.pollInterval);
+    setInterval(() => {
+      void this.refreshPoll();
+    }, intervalSeconds * 1000);
+  }
+
+  // ─────────────────────────────────────────────
+  // Device discovery + Matter registration
+  // ─────────────────────────────────────────────
+
+  private async discoverAndRegisterDevices(): Promise<void> {
+    // Load devices into devicesById (same as refreshDevices but without reconcileAccessories)
+    let cloudDevices: AuxDevice[] = [];
+
+    try {
+      await this.client.ensureLoggedIn(this.config.username!, this.config.password!);
+      cloudDevices = await this.client.listDevices({
+        includeIds: this.includeIds,
+        excludeIds: this.excludeIds,
+      });
+      this.lastKnownCloudDevices = cloudDevices;
+      this.log.debug('Fetched %d AUX Cloud devices', cloudDevices.length);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.log.warn('Failed to fetch AUX Cloud devices: %s', message);
+      cloudDevices = this.lastKnownCloudDevices.length > 0
+        ? this.lastKnownCloudDevices
+        : cloudDevices;
+      this.client.invalidateSession();
+    }
+
+    const lanOnlyDevices = this.getLanOnlyDevices();
+    const allDevices = [...cloudDevices, ...lanOnlyDevices];
+
+    if (this.config.localControlEnabled) {
+      await Promise.all(allDevices.map(async (device) => {
+        const mac = device.mac;
+        if (!mac) return;
+        const mapping = this.deviceControl.getDeviceMapping(mac);
+        if (!mapping) return;
+        try {
+          const localParams = await this.deviceControl.pollLocalState(mapping.ip, mapping.mac);
+          if (localParams != null) {
+            device.params = { ...device.params, ...localParams };
+            device.state = 1;
+            this.log.info('[LAN] Poll OK for %s', device.endpointId);
+          }
+        } catch {
+          this.deviceControl.recordFailure(device.endpointId);
+          this.log.warn('[LAN] Poll failed for %s', device.endpointId);
+        }
+      }));
+    }
+
+    // Populate devicesById
+    for (const device of allDevices) {
+      const existing = this.devicesById.get(device.endpointId);
+      const merged = existing
+        ? {
+          ...existing,
+          ...device,
+          params: this.mergeParams(existing.params, device.params),
+          state: device.state ?? existing.state,
+          lastUpdated: device.lastUpdated ?? existing.lastUpdated,
+        }
+        : {
+          ...device,
+          params: device.params ?? {},
+        };
+      this.devicesById.set(device.endpointId, merged);
+    }
+
+    // Register Matter accessories for each device
+    const allKnownDevices = [...this.devicesById.values()];
+    for (const device of allKnownDevices) {
+      const deviceConfig = this.config.devices?.find((d) => d.mac === device.mac);
+      if (deviceConfig?.enableMatter === false) continue;
+      try {
+        const matterAccessory = new MatterThermostatAccessory(this, device);
+        const thermostat = matterAccessory.toAccessory();
+        const switches = matterAccessory.getMatterSwitchAccessories();
+
+        // Nest switches as parts of the thermostat so they appear grouped in Home
+        if (switches.length > 0) {
+          (thermostat as Record<string, unknown>).parts = switches;
+        }
+        await this.registerMatterAccessoriesInternal([thermostat], device.friendlyName);
+
+        // Only add to poll list after successful registration
+        this.matterAccessories.push(matterAccessory);
+        this.log.info('[Matter] Registered "%s" (%d switches)', device.friendlyName, switches.length);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        this.log.error('[Matter] Failed to register accessory for "%s": %s', device.friendlyName, message);
+      }
+    }
+
+    // Unregister legacy HAP accessories now that Matter has taken control
+    if (this.cachedHapAccessories.length > 0) {
+      try {
+        this.api.unregisterPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, this.cachedHapAccessories);
+        this.log.info('[Matter] Unregistered %d legacy HAP accessories', this.cachedHapAccessories.length);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        this.log.warn('[Matter] Failed to unregister legacy HAP accessories: %s', message);
+      }
+      this.cachedHapAccessories = [];
+    }
+  }
+
+  // ─────────────────────────────────────────────
+  // Poll loop — Matter variant (no reconcileAccessories)
+  // ─────────────────────────────────────────────
+
+  private async refreshPoll(): Promise<void> {
+    if (this.isSyncing) return;
+    this.isSyncing = true;
+
+    try {
+      let cloudDevices: AuxDevice[] = [];
+
+      try {
+        await this.client.ensureLoggedIn(this.config.username!, this.config.password!);
+        cloudDevices = await this.client.listDevices({
+          includeIds: this.includeIds,
+          excludeIds: this.excludeIds,
+        });
+        this.lastKnownCloudDevices = cloudDevices;
+        this.log.debug('Fetched %d AUX Cloud devices', cloudDevices.length);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        this.log.warn('Failed to fetch AUX Cloud devices: %s', message);
+        cloudDevices = this.lastKnownCloudDevices.length > 0
+          ? this.lastKnownCloudDevices
+          : cloudDevices;
+        this.client.invalidateSession();
+      }
+
+      const lanOnlyDevices = this.getLanOnlyDevices();
+      const allDevices = [...cloudDevices, ...lanOnlyDevices];
+
+      if (this.config.localControlEnabled) {
+        await Promise.all(allDevices.map(async (device) => {
+          const mac = device.mac;
+          if (!mac) return;
+          const mapping = this.deviceControl.getDeviceMapping(mac);
+          if (!mapping) return;
+          try {
+            const localParams = await this.deviceControl.pollLocalState(mapping.ip, mapping.mac);
+            if (localParams != null) {
+              device.params = { ...device.params, ...localParams };
+              device.state = 1;
+              this.log.info('[LAN] Poll OK for %s', device.endpointId);
+            }
+          } catch {
+            this.deviceControl.recordFailure(device.endpointId);
+            this.log.warn('[LAN] Poll failed for %s', device.endpointId);
+          }
+        }));
+      }
+
+      if (allDevices.length > 0) {
+        // Update devicesById — same merge logic as reconcileAccessories but without HAP
+        for (const device of allDevices) {
+          const existing = this.devicesById.get(device.endpointId);
+          const merged = existing
+            ? {
+              ...existing,
+              ...device,
+              params: this.mergeParams(existing.params, device.params),
+              state: device.state ?? existing.state,
+              lastUpdated: device.lastUpdated ?? existing.lastUpdated,
+            }
+            : {
+              ...device,
+              params: device.params ?? {},
+            };
+
+          if (this.isStaleState(device.endpointId) && existing) {
+            merged.params = { ...existing.params };
+            merged.state = existing.state ?? merged.state;
+          }
+
+          this.devicesById.set(device.endpointId, merged);
+        }
+
+        // Update Matter accessory states
+        this.refreshMatterState();
+      }
+    } finally {
+      this.isSyncing = false;
+    }
+  }
+
+  // ─────────────────────────────────────────────
+  // Matter accessory registration
+  // ─────────────────────────────────────────────
+
+  public async registerMatterAccessoriesInternal(
+    accessories: unknown[],
+    deviceName: string,
+  ): Promise<void> {
+    // Always unregister first to clear stale Matter-side state.
+    // This prevents the "already defined" identity-conflict that occurs when
+    // Matter has a persisted entry but the endpoint is broken (from a previous
+    // transaction rollback). The promise resolves even on error, so we can't
+    // detect the conflict — we must prevent it entirely.
+    for (const acc of accessories) {
+      try {
+        await this.api.matter.unregisterPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [acc]);
+      } catch {
+        /* ignore — accessory may not exist in Matter */
+      }
+    }
+
+    // Register all accessories fresh
+    for (const acc of accessories) {
+      await this.api.matter.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [acc]);
+      const uuid = (acc as { UUID: string }).UUID;
+      this.log.info('[Matter] "%s" registered fresh (UUID: %s)', deviceName, uuid);
+    }
+  }
+
+  // ─────────────────────────────────────────────
+  // Matter state refresh — called on each poll
+  // ─────────────────────────────────────────────
+
+  private refreshMatterState(): void {
+    for (const matterAccessory of this.matterAccessories) {
+      // Skip Matter state refresh if there's a pending command — prevents
+      // overwriting optimistic state before the cloud confirms.
+      const dev = matterAccessory.getDevice();
+      if (dev && this.isStaleState(dev.endpointId)) {
+        continue;
+      }
+      void matterAccessory.refresh();
+    }
+  }
+
+  // ─────────────────────────────────────────────
+  // IAuxCloudPlatform implementation
+  // ─────────────────────────────────────────────
+
+  public getDevice(endpointId: string): AuxDevice | undefined {
+    return this.devicesById.get(endpointId);
+  }
+
+  public updateCachedDevice(device: AuxDevice): void {
+    this.devicesById.set(device.endpointId, device);
+  }
+
+  /**
+   * Envía params al dispositivo con local/cloud selection y retry.
+   * Delega a AuxDeviceControl para selección automática.
+   */
+  public async sendDeviceParamsWithRetry(
+    device: AuxDevice,
+    params: Record<string, number>,
+    retryCount: number = this.commandRetryCount,
+  ): Promise<void> {
+    // Ensure cloud session is valid before sending command
+    if (this.credentialsConfigured) {
+      await this.client.ensureLoggedIn(this.config.username!, this.config.password!);
+    }
+    try {
+      await this.deviceControl.sendCommand(device, params, {
+        globalStrategy: this.config.controlStrategy,
+        localRetryCount: retryCount,
+        cloudRetryCount: retryCount,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.log.error('Failed to control %s: %s. Params: %o', device.endpointId, message, params);
+      throw new AuxApiError(message);
+    }
+  }
+
+  /**
+   * Dispara el comando en background. El caller ya aplicó el estado optimista.
+   */
+  public startDeviceCommand(
+    device: AuxDevice,
+    params: Record<string, number>,
+    retryCount: number = this.commandRetryCount,
+  ): void {
+    void (async () => {
+      try {
+        await this.sendDeviceParamsWithRetry(device, params, retryCount);
+      } catch {
+        // Command failed — schedule quick refresh to sync state
+        this.requestRefresh(500);
+      }
+    })();
+  }
+
+  /**
+   * Registra un comando pendiente. Previene que el poll sobreescriba
+   * el estado optimista antes de que la cloud confirme.
+   * Retorna el número de secuencia, o null si ya existe uno más nuevo.
+   */
+  public registerPendingCommandWithState(
+    endpointId: string,
+    expectedState: 0 | 1,
+  ): number | null {
+    const existing = this.pendingCommands.get(endpointId);
+    const seq = (existing?.sequence ?? 0) + 1;
+
+    if (existing && existing.sequence >= seq) {
+      return null;
+    }
+
+    this.pendingCommands.set(endpointId, {
+      sequence: seq,
+      timestamp: Date.now(),
+      expectedState,
+    });
+    return seq;
+  }
+
+  public registerPendingCommand(endpointId: string): number | null {
+    return this.registerPendingCommandWithState(endpointId, 1);
+  }
+
+  /**
+   * Marca el comando pendiente como completado.
+   * A partir de aquí el poll puede actualizar el estado normalmente.
+   */
+  public completePendingCommand(endpointId: string): void {
+    this.pendingCommands.delete(endpointId);
+  }
+
+  /**
+   * Retorna true si hay un comando pendiente activo.
+   * Usado en el poll para saltar actualizaciones stale.
+   */
+  public isStaleState(endpointId: string): boolean {
+    return this.pendingCommands.has(endpointId);
+  }
+
+  public requestRefresh(delayMs = 1_500): void {
+    if (this.refreshDebounce) {
+      clearTimeout(this.refreshDebounce);
+    }
+
+    this.refreshDebounce = setTimeout(() => {
+      void this.refreshPoll();
+    }, delayMs);
+  }
+
+  // ─────────────────────────────────────────────
+  // Private helpers
+  // ─────────────────────────────────────────────
+
+  private getLanOnlyDevices(): AuxDevice[] {
+    if (!this.config.localControlEnabled) return [];
+    return this.deviceControl.getLanOnlyMappings().map((mapping) => {
+      const normalizedMac = mapping.mac.toLowerCase();
+      const endpointId = `lan-${normalizedMac.replace(/:/g, '')}`;
+      return (
+        this.devicesById.get(endpointId) ?? {
+          endpointId,
+          friendlyName: mapping.name,
+          productId: 'broadlink',
+          devSession: '',
+          devicetypeFlag: 0,
+          cookie: '',
+          mac: normalizedMac,
+          // Default params so fan/switch accessories appear before first LAN poll
+          params: {
+            pwr: 0,
+            temp: 240,    // 24°C ×10
+            ac_mode: 4,   // AUTO
+            ac_mark: 0,   // AUTO fan speed
+            ac_vdir: 0,
+            ac_hdir: 0,
+            ac_slp: 0,
+            scrdisp: 0,
+            mldprf: 0,
+            ac_health: 0,
+            ac_clean: 0,
+            mute: 0,
+            turbo: 0,
+          },
+          state: 1,
+          // LAN-only: siempre considerado online; poll actualiza params, no conectividad
+        }
+      );
+    });
+  }
+
+  private mergeParams(
+    existing: Record<string, number> | undefined,
+    incoming: Record<string, number> | undefined,
+  ): Record<string, number> {
+    const merged: Record<string, number> = { ...(existing ?? {}) };
+
+    if (incoming) {
+      for (const [key, value] of Object.entries(incoming)) {
+        if (typeof value === 'number' && !Number.isNaN(value)) {
+          merged[key] = value;
+        }
+      }
+    }
+
+    return merged;
+  }
+
+  private validatePollInterval(interval?: number): number {
+    if (!interval || Number.isNaN(interval) || interval < 15) {
+      return 30;
+    }
+    if (interval > 600) {
+      return 600;
+    }
+    return interval;
+  }
+}

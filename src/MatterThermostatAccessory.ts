@@ -35,7 +35,7 @@ import {
   AuxFanSpeed,
   AuxProducts,
 } from './api/constants';
-import type { AuxCloudPlatform, FeatureSwitchKey } from './platform';
+import type { FeatureSwitchKey, IAuxCloudPlatform } from './types';
 import type { AuxDevice } from './api/AuxCloudClient';
 
 // Matter accessory configuration type (returned by toAccessory())
@@ -76,12 +76,12 @@ const THERMOSTAT_MODE_FAN_ONLY = 7; // 7 = Fan Only
 export class MatterThermostatAccessory {
   private readonly api: API;
   private readonly log: Logger;
-  private readonly platform: AuxCloudPlatform;
+  private readonly platform: IAuxCloudPlatform;
   private device?: AuxDevice;
   private readonly endpointId: string;
 
   constructor(
-    platform: AuxCloudPlatform,
+    platform: IAuxCloudPlatform,
     device: AuxDevice,
   ) {
     this.api = platform.api;
