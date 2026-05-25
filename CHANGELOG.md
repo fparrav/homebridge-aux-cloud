@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.0.12-beta.42 - 2026-05-25
+
+## fix(matter): temperatura 0°C cuando AC no ha reportado aún; actualiza CLAUDE.md
+
+- `getMatterCurrentTemp()` ahora trata `AC_TEMPERATURE_AMBIENT = 0` como "no disponible" y retorna `2100` (21°C) como default. El AC reporta 0 cuando el parámetro no ha sido fetched aún; pasarlo literal como `externalMeasuredIndoorTemperature: 0` causaba que Apple Home mostrara 0°C.
+- Actualizado `CLAUDE.md`: agrega referencia a wiki oficial de homebridge-matter HVAC, gotchas de `externalMeasuredIndoorTemperature`, re-pairing obligatorio tras cambios de device type, y nota sobre feature switches como parts causando ícono switch en Apple Home.
+
 ## v0.0.12-beta.41 - 2026-05-25
 
 ## fix(matter): localTemperature read-only, temperatureStep rounding, temperatureStep en IAuxCloudPlatform

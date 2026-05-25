@@ -336,7 +336,8 @@ export class MatterThermostatAccessory {
   private getMatterCurrentTemp(): number {
     if (!this.device) return 2100;
     const ambient = this.device.params?.[AC_TEMPERATURE_AMBIENT];
-    if (ambient === undefined) return 2100;
+    // AC reports 0 when not yet fetched; treat as unknown and default to 21°C
+    if (!ambient) return 2100;
     return Math.round((ambient / 10) * 100);
   }
 
