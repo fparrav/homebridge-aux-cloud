@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.0.12-beta.40 - 2026-05-25
+
+## fix(matter): corregir fanModeSequence y etiquetas de feature switches
+
+- `fanModeSequence` corregido de `5` (OffLowMedHighAuto) a `0` (OffLowMedHigh): el valor anterior requería el feature flag `[AUT]` que Homebridge 2.x valida estrictamente, causando potencial error al inicializar el cluster y mostrando el ícono incorrecto (switch) en Apple Home.
+- `getMatterFanMode()` actualizado: el valor por defecto pasa de `5` (Auto) a `1` (Low), ya que Auto no está disponible sin el feature flag `[AUT]`.
+- `displayName` de los feature switches cambiado de `"<device> - <label>"` a solo `"<label>"` (e.g., "Eco Mode", "Screen Display"): mejora la identificación de los switches agrupados en Apple Home.
+
 ## v0.0.12-beta.39 - 2026-05-25
 
 ## refactor: reemplazar enableHAP/enableMatter per-device por campo bridge enum

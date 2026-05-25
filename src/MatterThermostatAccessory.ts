@@ -131,7 +131,7 @@ export class MatterThermostatAccessory {
         },
         fanControl: {
           fanMode: this.getMatterFanMode(),
-          fanModeSequence: 5, // 5 = OffLowMedHighAuto — exposes Auto to HomeKit
+          fanModeSequence: 0, // 0 = OffLowMedHigh — Auto requires [AUT] feature flag not supported by Homebridge 2.x
           percentSetting: this.getMatterFanPercent(),
           percentCurrent: this.getMatterFanPercent(),
         },
@@ -298,7 +298,7 @@ export class MatterThermostatAccessory {
       case AuxFanSpeed.MEDIUM: return 2; // Medium
       case AuxFanSpeed.HIGH: return 3; // High
       case AuxFanSpeed.TURBO: return 3; // High (closest to Turbo)
-      default: return 5; // Auto — allows HomeKit to control fan speed natively
+      default: return 1; // Low — Auto not available without [AUT] feature flag
     }
   }
 
@@ -401,7 +401,7 @@ export class MatterThermostatAccessory {
       switches.push({
         id: uuid,         // required by Homebridge for parts (validates as part.id)
         UUID: uuid,
-        displayName: `${this.device.friendlyName} - ${m.label}`,
+        displayName: m.label,
         deviceType: this.api.matter.deviceTypes.OnOffSwitch,
         serialNumber: `${this.endpointId}-${m.key}-${m.label}`.slice(0, 32),
         manufacturer: 'AUX',
