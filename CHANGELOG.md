@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.0.12-beta.37 - 2026-05-25
+
+## fix: require('./matter') rompía carga del plugin
+
+La beta.36 fallaba al iniciar porque `import './matter'` en `Platform.Proxy.ts` se compilaba como `require('./matter')` en el JS output, pero `matter.d.ts` no tiene un `.js` correspondiente — causando `Cannot find module './matter'` en runtime.
+
+`matter.d.ts` ya está incluido globalmente en la compilación vía `"src/**/*.ts"` en tsconfig, por lo que no se necesita importarlo explícitamente.
+
 ## v0.0.12-beta.36 - 2026-05-25
 
 ## refactor: Matter-first con HAP fallback (patrón Roomba)
