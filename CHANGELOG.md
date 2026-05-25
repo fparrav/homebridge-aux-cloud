@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.0.12-beta.38 - 2026-05-25
+
+## fix: agregar peerDependencies para homebridge
+
+`package.json` no declaraba `homebridge` en `peerDependencies`, lo que causaba que npm intentara reorganizar el directorio `homebridge` en `node_modules` durante la instalación del plugin, resultando en errores `ENOTEMPTY`. Agregado `"homebridge": "^1.8.0 || ^2.0.0"` como peer dependency conforme a las convenciones de plugins Homebridge.
+
 ## v0.0.12-beta.37 - 2026-05-25
 
 ## fix: require('./matter') rompía carga del plugin

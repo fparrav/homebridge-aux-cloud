@@ -1,6 +1,6 @@
 {
   "name": "homebridge-aux-cloud",
-  "version": "0.0.12-beta.37",
+  "version": "0.0.12-beta.38",
   "description": "Homebridge plugin for AUX Cloud appliances (ported from maeek/ha-aux-cloud).",
   "license": "MIT",
   "keywords": [
@@ -39,6 +39,9 @@
     "watch": "tsc -p tsconfig.build.json --watch",
     "prepare": "npm run build",
     "prepublishOnly": "npm run lint && npm run build"
+  },
+  "peerDependencies": {
+    "homebridge": "^1.8.0 || ^2.0.0"
   },
   "dependencies": {
     "axios": "^1.7.7",
