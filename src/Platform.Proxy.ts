@@ -3,8 +3,6 @@ import type { API, DynamicPlatformPlugin, Logger, PlatformAccessory, PlatformCon
 import { AuxCloudHAPPlatform } from './Platform.HAP';
 import { AuxCloudMatterPlatform } from './Platform.Matter';
 import type { AuxCloudPlatformConfig } from './types';
-// Bring in Matter API type augmentations (isMatterAvailable, isMatterEnabled)
-import './matter';
 
 interface InitializablePlatform extends DynamicPlatformPlugin {
   initialize(): Promise<void>;
