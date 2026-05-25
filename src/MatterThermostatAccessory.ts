@@ -20,7 +20,6 @@ import {
   AC_MILDEW_PROOF_ON,
   AC_POWER,
   AC_POWER_OFF,
-  AC_POWER_ON,
   AC_SLEEP,
   AC_SLEEP_OFF,
   AC_SLEEP_ON,
@@ -112,7 +111,7 @@ export class MatterThermostatAccessory {
       hardwareRevision: '1.0.0',
       clusters: {
         thermostat: {
-          externalMeasuredIndoorTemperature: this.getMatterCurrentTemp(),
+          localTemperature: this.getMatterCurrentTemp(),
           occupiedHeatingSetpoint: this.getMatterHeatingSetpoint(),
           occupiedCoolingSetpoint: this.getMatterCoolingSetpoint(),
           minHeatSetpointLimit: 700,
@@ -249,11 +248,6 @@ export class MatterThermostatAccessory {
       return;
     }
 
-    // Si el AC estaba apagado, encender antes de cambiar modo
-    if (this.getMatterOnOffState() === 0) {
-      await this.sendCommand(AC_POWER_ON);
-    }
-
     let auxMode: AuxAcModeValue;
     switch (request.systemMode) {
       case THERMOSTAT_MODE_COOL:
@@ -263,11 +257,9 @@ export class MatterThermostatAccessory {
         auxMode = AuxAcModeValue.HEATING;
         break;
       case THERMOSTAT_MODE_DRY:
-         // 6 = Precooling in Matter → map to Dry for dehumidification
         auxMode = AuxAcModeValue.DRY;
         break;
       case THERMOSTAT_MODE_FAN_ONLY:
-         // 7 = Fan Only
         auxMode = AuxAcModeValue.FAN;
         break;
       case THERMOSTAT_MODE_AUTO:
@@ -275,7 +267,15 @@ export class MatterThermostatAccessory {
         auxMode = AuxAcModeValue.AUTO;
         break;
     }
-    await this.sendCommand({ [AUX_MODE]: auxMode });
+
+    // Combine power-on + mode in a single command so the LAN merge (fullParams = {...device.params, ...params})
+    // uses pwr=1 from our params instead of the stale pwr=0 from the last poll.
+    // Sending two separate commands would let the second command pick up the old pwr=0 before the first poll completes.
+    const needsPowerOn = this.getMatterOnOffState() === 0;
+    await this.sendCommand({
+      ...(needsPowerOn ? { [AC_POWER]: 1 } : {}),
+      [AUX_MODE]: auxMode,
+    });
   }
 
   // ─────────────────────────────────────────────
@@ -476,7 +476,7 @@ export class MatterThermostatAccessory {
         const uuid = this.toAccessory().UUID;
 
         await this.api.matter.updateAccessoryState(uuid, 'thermostat', {
-          externalMeasuredIndoorTemperature: this.getMatterCurrentTemp(),
+          localTemperature: this.getMatterCurrentTemp(),
           occupiedHeatingSetpoint: this.getMatterHeatingSetpoint(),
           occupiedCoolingSetpoint: this.getMatterCoolingSetpoint(),
           systemMode: this.getMatterSystemMode(),

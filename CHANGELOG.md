@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.0.12-beta.43 - 2026-05-25
+
+## fix(matter): usar localTemperature para temperatura actual; corregir apagado tras cambio de modo
+
+- **Bug temperatura 0°C**: `externalMeasuredIndoorTemperature` no es el atributo que Apple Home muestra como temperatura actual — Apple Home muestra `localTemperature`. Reemplazado en el estado inicial (`toAccessory()`) y en actualizaciones de poll (`refresh()`). El valor `envtemp` del protocolo LAN (e.g. 18°C) ahora se refleja correctamente en la UI.
+- **Bug AC se apaga tras cambio de modo**: `handleSystemModeChange` enviaba dos comandos separados — `AC_POWER_ON` y `{AUX_MODE}`. La ruta LAN hace merge completo con `device.params` (que aún tiene `pwr=0` del último poll), por lo que el segundo comando llegaba con `pwr=0` apagando el AC. Corregido: power-on y cambio de modo se combinan en un solo comando, de modo que `pwr=1` en los params entrantes sobreescribe el `pwr=0` del estado stale.
+
 ## v0.0.12-beta.42 - 2026-05-25
 
 ## fix(matter): temperatura 0°C cuando AC no ha reportado aún; actualiza CLAUDE.md
