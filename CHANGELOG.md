@@ -1,5 +1,14 @@
 # Changelog
 
+## v0.0.12-beta.44 - 2026-05-25
+
+## fix(matter): thermostatRunningMode crash, ícono switch, regresión externalMeasuredIndoorTemperature
+
+- **Crash en cada poll**: `thermostatRunningMode` usaba valores `0x01` (Heating) y `0x08` (Cooling) que no existen en el enum Matter (válidos: 0, 3, 4). Causa: rollback en cada actualización de estado → la temperatura y el modo nunca se actualizaban. Solución: eliminado `thermostatRunningMode` del cluster (la wiki de homebridge-matter no lo lista como atributo soportado).
+- **Regresión de temperatura (beta.43)**: Se había cambiado `externalMeasuredIndoorTemperature` → `localTemperature` incorrectamente. La wiki dice explícitamente "use externalMeasuredIndoorTemperature instead of localTemperature" y que auto-popula `localTemperature`. Revertido.
+- **Ícono switch en Apple Home**: Los `OnOffSwitch` registrados como `parts` del Thermostat hacían que Apple Home clasificara el dispositivo en "Otro" (switch) en lugar de "Clima/HVAC". Solución: los feature switches ahora se registran como accesorios Matter independientes; el thermostat queda solo como `Thermostat` device type.
+- Eliminados atributos no estándar `presetTypes`, `numberOfPresets`, `activePresetHandle` que podían causar errores de validación.
+
 ## v0.0.12-beta.43 - 2026-05-25
 
 ## fix(matter): usar localTemperature para temperatura actual; corregir apagado tras cambio de modo

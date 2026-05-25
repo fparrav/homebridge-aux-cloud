@@ -249,15 +249,21 @@ export class AuxCloudMatterPlatform implements DynamicPlatformPlugin, IAuxCloudP
         const thermostat = matterAccessory.toAccessory();
         const switches = matterAccessory.getMatterSwitchAccessories();
 
-        // Nest switches as parts of the thermostat so they appear grouped in Home
-        if (switches.length > 0) {
-          (thermostat as Record<string, unknown>).parts = switches;
-        }
+        // Register thermostat as a standalone accessory (no OnOffSwitch parts).
+        // Including OnOffSwitch as parts causes Apple Home to classify the composite
+        // device as a switch/Other instead of Climate/HVAC.
         await this.registerMatterAccessoriesInternal([thermostat], device.friendlyName);
+
+        // Register each feature switch as an independent Matter accessory so Apple Home
+        // shows it as a separate switch without affecting the thermostat device type.
+        for (const sw of switches) {
+          const swName = (sw as { displayName: string }).displayName;
+          await this.registerMatterAccessoriesInternal([sw], `${device.friendlyName} - ${swName}`);
+        }
 
         // Only add to poll list after successful registration
         this.matterAccessories.push(matterAccessory);
-        this.log.info('[Matter] Registered "%s" (%d switches)', device.friendlyName, switches.length);
+        this.log.info('[Matter] Registered "%s" (%d switches as independent accessories)', device.friendlyName, switches.length);
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         this.log.error('[Matter] Failed to register accessory for "%s": %s', device.friendlyName, message);

@@ -111,7 +111,7 @@ export class MatterThermostatAccessory {
       hardwareRevision: '1.0.0',
       clusters: {
         thermostat: {
-          localTemperature: this.getMatterCurrentTemp(),
+          externalMeasuredIndoorTemperature: this.getMatterCurrentTemp(),
           occupiedHeatingSetpoint: this.getMatterHeatingSetpoint(),
           occupiedCoolingSetpoint: this.getMatterCoolingSetpoint(),
           minHeatSetpointLimit: 700,
@@ -121,12 +121,6 @@ export class MatterThermostatAccessory {
           minSetpointDeadBand: 25,
           controlSequenceOfOperation: 4,
           systemMode: this.getMatterSystemMode(),
-          thermostatRunningMode: this.getMatterThermostatRunningMode(),
-          presetTypes: [
-              {"presetScenario": 1, "numberOfPresets": 1, "presetTypeFeatures": {}}, // Occupied
-          ],
-          numberOfPresets: 1,
-          activePresetHandle: null,
         },
         fanControl: {
           fanMode: this.getMatterFanMode(),
@@ -359,19 +353,6 @@ export class MatterThermostatAccessory {
 
   // ─────────────────────────────────────────────
 
-  private getMatterThermostatRunningMode(): number {
-    const systemMode = this.getMatterSystemMode();
-    if (systemMode === 0) return 0; // Off → no running mode
-    switch (systemMode) {
-      case THERMOSTAT_MODE_HEAT: return 0x01; // Heating
-      case THERMOSTAT_MODE_COOL:
-      case THERMOSTAT_MODE_DRY:
-      case THERMOSTAT_MODE_FAN_ONLY:
-      case THERMOSTAT_MODE_AUTO:
-      default: return 0x08; // Cooling (or generic for auto/dry/fan)
-    }
-  }
-
   // ─────────────────────────────────────────────
   // Feature switches → On/Off Switch accessories
 
@@ -402,7 +383,6 @@ export class MatterThermostatAccessory {
 
       const uuid = this.api.matter.uuid.generate(`matter-switch-${this.endpointId}-${m.key}`);
       switches.push({
-        id: uuid,         // required by Homebridge for parts (validates as part.id)
         UUID: uuid,
         displayName: m.label,
         deviceType: this.api.matter.deviceTypes.OnOffSwitch,
@@ -476,11 +456,10 @@ export class MatterThermostatAccessory {
         const uuid = this.toAccessory().UUID;
 
         await this.api.matter.updateAccessoryState(uuid, 'thermostat', {
-          localTemperature: this.getMatterCurrentTemp(),
+          externalMeasuredIndoorTemperature: this.getMatterCurrentTemp(),
           occupiedHeatingSetpoint: this.getMatterHeatingSetpoint(),
           occupiedCoolingSetpoint: this.getMatterCoolingSetpoint(),
           systemMode: this.getMatterSystemMode(),
-          thermostatRunningMode: this.getMatterThermostatRunningMode(),
         });
 
         await this.api.matter.updateAccessoryState(uuid, 'fanControl', {
@@ -492,14 +471,14 @@ export class MatterThermostatAccessory {
           this.log.debug(`[Matter][${this.device?.friendlyName}] fanControl refresh error: ${msg}`);
         });
 
-        // Update switch states — switches are parts of the thermostat, use partId
+        // Update switch states — each switch is registered as an independent accessory
         const switchAccessories = this.getMatterSwitchAccessories();
         for (const sw of switchAccessories) {
-          const partId = sw.UUID as string;
+          const switchUUID = sw.UUID as string;
           const clusters = sw.clusters as Record<string, Record<string, unknown>>;
           const onOff = clusters?.onOff?.onOff as number;
-          if (partId && onOff !== undefined) {
-            await this.api.matter.updateAccessoryState(uuid, 'onOff', { onOff }, partId);
+          if (switchUUID && onOff !== undefined) {
+            await this.api.matter.updateAccessoryState(switchUUID, 'onOff', { onOff }).catch(() => {});
           }
         }
       }
