@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.0.12-beta.47 - 2026-05-25
+
+### fix(matter): THERMOSTAT_MODE_DRY corregido (6→8), doble comando en fan y setpoints eliminado
+
+- **DRY mode**: `THERMOSTAT_MODE_DRY` corregido de `6` (Precooling) a `8` (Dry) según Matter Spec § 9.1. El valor 6 era Precooling — un modo distinto al Dry del AC.
+- **Doble comando en fan**: `handlePercentSettingChange` enviaba dos comandos al detectar transición on/off. Simplificado a un único comando: `0%→MUTE`, `1-25%→LOW`, `26-50%→MEDIUM`, `51-75%→HIGH`, `76-100%→TURBO`.
+- **Doble comando en setpoints**: `handleHeatingSetpointChange` y `handleCoolingSetpointChange` enviaban `AUX_MODE` por separado, lo que podía mezclar `pwr=0` stale del estado del dispositivo. Eliminado — el modo lo controla exclusivamente `handleSystemModeChange`.
+
 ## v0.0.12-beta.46 - 2026-05-25
 
 ## fix(matter): thermostat falla al registrar — presetTypes constraint "1 to 7"
