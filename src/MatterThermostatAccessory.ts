@@ -122,12 +122,6 @@ export class MatterThermostatAccessory {
           controlSequenceOfOperation: 4,
           systemMode: this.getMatterSystemMode(),
         },
-        fanControl: {
-          fanMode: this.getMatterFanMode(),
-          fanModeSequence: 0, // 0 = OffLowMedHigh — Auto requires [AUT] feature flag not supported by Homebridge 2.x
-          percentSetting: this.getMatterFanPercent(),
-          percentCurrent: this.getMatterFanPercent(),
-        },
       },
       handlers: {
         thermostat: {
@@ -135,6 +129,37 @@ export class MatterThermostatAccessory {
           occupiedHeatingSetpointChange: async (request: { occupiedHeatingSetpoint: number }) => this.handleHeatingSetpointChange(request),
           occupiedCoolingSetpointChange: async (request: { occupiedCoolingSetpoint: number }) => this.handleCoolingSetpointChange(request),
         },
+      },
+    } as MatterAccessoryConfig;
+  }
+
+  /**
+   * Fan device (§ 9.2) — registered as an independent accessory so Apple Home
+   * shows a dedicated fan speed tile separate from the thermostat.
+   */
+  toFanAccessory(): MatterAccessoryConfig {
+    const displayName = this.device?.friendlyName ?? 'AUX AC';
+    const productId = this.device?.productId;
+    const deviceName = AuxProducts.getDeviceName(productId) ?? 'AUX Air Conditioner';
+
+    return {
+      UUID: this.api.matter.uuid.generate(`matter-fan-${this.endpointId}`),
+      displayName: `${displayName} Fan`,
+      deviceType: this.api.matter.deviceTypes.Fan,
+      serialNumber: `${this.endpointId}-fan`.slice(0, 32),
+      manufacturer: 'AUX',
+      model: `${(deviceName ?? 'AUX').slice(0, 27)} Fan`,
+      firmwareRevision: this.api.packageJSON?.version ?? '1.0.0',
+      hardwareRevision: '1.0.0',
+      clusters: {
+        fanControl: {
+          fanMode: this.getMatterFanMode(),
+          fanModeSequence: 0, // 0 = OffLowMedHigh — Auto requires [AUT] feature flag
+          percentSetting: this.getMatterFanPercent(),
+          percentCurrent: this.getMatterFanPercent(),
+        },
+      },
+      handlers: {
         fanControl: {
           fanModeChange: async (request: { fanMode: number; oldFanMode: number }) => this.handleFanModeChange(request),
           percentSettingChange: async (request: { percentSetting: number; oldPercentSetting: number }) => this.handlePercentSettingChange(request),
@@ -462,7 +487,8 @@ export class MatterThermostatAccessory {
           systemMode: this.getMatterSystemMode(),
         });
 
-        await this.api.matter.updateAccessoryState(uuid, 'fanControl', {
+        const fanUuid = this.toFanAccessory().UUID;
+        await this.api.matter.updateAccessoryState(fanUuid, 'fanControl', {
           fanMode: this.getMatterFanMode(),
           percentSetting: this.getMatterFanPercent(),
           percentCurrent: this.getMatterFanPercent(),

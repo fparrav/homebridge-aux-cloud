@@ -55,20 +55,23 @@ describe('MatterThermostatAccessory.toAccessory()', () => {
     //   1 = OffLowHigh
     //   5 = OffHigh
     const AUT_SEQUENCES = [2, 3, 4];
-    const config = accessory.toAccessory();
-    const seq = (config.clusters as Record<string, Record<string, unknown>>).fanControl?.fanModeSequence as number;
+    const fanConfig = accessory.toFanAccessory();
+    const seq = (fanConfig.clusters as Record<string, Record<string, unknown>>).fanControl?.fanModeSequence as number;
 
     expect(AUT_SEQUENCES).not.toContain(seq);
   });
 
-  test('fanControl cluster is present in toAccessory output', () => {
-    const config = accessory.toAccessory();
-    expect((config.clusters as Record<string, unknown>).fanControl).toBeDefined();
+  test('fanControl cluster is present in toFanAccessory output (Fan § 9.2 device type)', () => {
+    const fanConfig = accessory.toFanAccessory();
+    expect((fanConfig.clusters as Record<string, unknown>).fanControl).toBeDefined();
+    // fanControl must NOT be in the thermostat clusters (separate device types)
+    const thermostatConfig = accessory.toAccessory();
+    expect((thermostatConfig.clusters as Record<string, unknown>).fanControl).toBeUndefined();
   });
 
   test('fanControl handlers are wired for fanModeChange and percentSettingChange', () => {
-    const config = accessory.toAccessory();
-    const handlers = (config.handlers as Record<string, Record<string, unknown>>).fanControl;
+    const fanConfig = accessory.toFanAccessory();
+    const handlers = (fanConfig.handlers as Record<string, Record<string, unknown>>).fanControl;
     expect(typeof handlers?.fanModeChange).toBe('function');
     expect(typeof handlers?.percentSettingChange).toBe('function');
   });

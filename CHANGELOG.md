@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.0.12-beta.45 - 2026-05-25
+
+## feat(matter): exposer fan como accesorio Fan (§ 9.2) independiente con slider de velocidad
+
+- `fanControl` movido desde el cluster del Thermostat a un nuevo método `toFanAccessory()` que crea un accesorio de tipo `Fan` (Matter § 9.2). En Apple Home aparece como un tile dedicado con slider de velocidad de ventilador (porcentaje) y selector de modo (Off/Low/Medium/High).
+- El accesorio Fan se registra en `Platform.Matter.ts` como accesorio independiente junto al Thermostat y los feature switches. UUID estable: `matter-fan-<endpointId>`.
+- `refresh()` actualiza el Fan por su propio UUID (`matter-fan-*`) en lugar del UUID del thermostat.
+- Los handlers `fanModeChange` y `percentSettingChange` permanecen iguales — solo cambia el accesorio al que están asociados.
+- Tests actualizados: `fanControl` verificado en `toFanAccessory()` y confirmado ausente en `toAccessory()`.
+
 ## v0.0.12-beta.44 - 2026-05-25
 
 ## fix(matter): thermostatRunningMode crash, ícono switch, regresión externalMeasuredIndoorTemperature
