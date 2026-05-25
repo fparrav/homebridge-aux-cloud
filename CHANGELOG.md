@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.0.12-beta.50 - 2026-05-25
+
+## fix: incluir código de modo mixto Matter+HAP (faltó en beta.49)
+
+Beta.49 fue publicada sin el código real — solo contenía el CHANGELOG. Esta release incluye los cambios correctos:
+
+- `Platform.Proxy.ts`: detecta dispositivos con `bridge: 'HAP'` → lanza ambas plataformas en paralelo
+- `Platform.HAP.ts`: parámetro `hapOnlyMode` para filtrar solo dispositivos HAP en modo mixto
+- `Platform.Matter.ts`: omite desregistro de accessories HAP en modo mixto
+
 ## v0.0.12-beta.49 - 2026-05-25
 
 ## feat(proxy): modo mixto Matter+HAP — soporte por dispositivo via bridge:'HAP'
