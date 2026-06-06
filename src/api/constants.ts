@@ -13,12 +13,12 @@ export const AC_TEMPERATURE_TARGET = 'temp';
 export const AC_TEMPERATURE_AMBIENT = 'envtemp';
 
 export const AC_SWING_VERTICAL = 'ac_vdir';
-export const AC_SWING_VERTICAL_ON = { [AC_SWING_VERTICAL]: 1 };
-export const AC_SWING_VERTICAL_OFF = { [AC_SWING_VERTICAL]: 0 };
+export const AC_SWING_VERTICAL_ON = { [AC_SWING_VERTICAL]: 0 }; // 0 = oscilar, 1 = fijo
+export const AC_SWING_VERTICAL_OFF = { [AC_SWING_VERTICAL]: 1 };
 
 export const AC_SWING_HORIZONTAL = 'ac_hdir';
-export const AC_SWING_HORIZONTAL_ON = { [AC_SWING_HORIZONTAL]: 1 };
-export const AC_SWING_HORIZONTAL_OFF = { [AC_SWING_HORIZONTAL]: 0 };
+export const AC_SWING_HORIZONTAL_ON = { [AC_SWING_HORIZONTAL]: 0 }; // 0 = oscilar, 1 = fijo
+export const AC_SWING_HORIZONTAL_OFF = { [AC_SWING_HORIZONTAL]: 1 };
 
 export const AC_AUXILIARY_HEAT = 'ac_astheat';
 export const AC_AUXILIARY_HEAT_OFF = { [AC_AUXILIARY_HEAT]: 0 };

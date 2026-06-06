@@ -767,11 +767,11 @@ export class AuxCloudPlatformAccessory {
     // Aplicar estado optimista inmediatamente
     this.device.params = this.device.params ?? {};
     if (this.supportsSwingVertical) {
-      this.device.params[AC_SWING_VERTICAL] = enabled ? 1 : 0;
+      this.device.params[AC_SWING_VERTICAL] = enabled ? 0 : 1; // 0 = oscilar, 1 = fijo
       Object.assign(payload, enabled ? { ...AC_SWING_VERTICAL_ON } : { ...AC_SWING_VERTICAL_OFF });
     }
     if (this.supportsSwingHorizontal) {
-      this.device.params[AC_SWING_HORIZONTAL] = enabled ? 1 : 0;
+      this.device.params[AC_SWING_HORIZONTAL] = enabled ? 0 : 1; // 0 = oscilar, 1 = fijo
       Object.assign(payload, enabled ? { ...AC_SWING_HORIZONTAL_ON } : { ...AC_SWING_HORIZONTAL_OFF });
     }
     this.platform.updateCachedDevice(this.device);
@@ -787,8 +787,8 @@ export class AuxCloudPlatformAccessory {
       return this.platform.Characteristic.SwingMode.SWING_DISABLED;
     }
 
-    const vertical = this.supportsSwingVertical ? this.device.params[AC_SWING_VERTICAL] === 1 : false;
-    const horizontal = this.supportsSwingHorizontal ? this.device.params[AC_SWING_HORIZONTAL] === 1 : false;
+    const vertical = this.supportsSwingVertical ? this.device.params[AC_SWING_VERTICAL] === 0 : false;
+    const horizontal = this.supportsSwingHorizontal ? this.device.params[AC_SWING_HORIZONTAL] === 0 : false;
 
     return (vertical || horizontal)
       ? this.platform.Characteristic.SwingMode.SWING_ENABLED
