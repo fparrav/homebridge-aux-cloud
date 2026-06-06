@@ -1,5 +1,19 @@
 # Changelog
 
+## v0.0.12-beta.52 - 2026-06-06
+
+### fix(hap): inverted swing mode in HAP — AUX AC protocol convention reversed
+
+The AUX AC protocol uses a **reversed** convention for swing direction parameters:
+`ac_vdir/hdir = 0` → swing ACTIVE (oscillating), `1` → swing FIXED.
+The `ON/OFF` constants were swapped for both vertical and horizontal axes.
+
+- `constants.ts`: corrected ON=0, OFF=1 for vertical and horizontal
+- `platformAccessory.ts`: fixed GET handler (`=== 0` instead of `=== 1`)
+- `platformAccessory.ts`: fixed optimistic state in SET handler (`enabled ? 0 : 1`)
+
+**Matter note**: No swing implementation exists in Matter. The `fanControl` cluster only exposes `fanMode`, `fanModeSequence`, `percentSetting`, `percentCurrent`.
+
 ## v0.0.12-beta.51 - 2026-05-25
 
 ### fix(hap): eliminar warnings 'illegal value' en HeaterCooler al inicializar
