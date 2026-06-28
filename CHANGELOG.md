@@ -1,5 +1,21 @@
 # Changelog
 
+## v0.0.12-beta.54 - 2026-06-28
+
+## feat(platform): expose mode — HAP + Matter simultaneously
+
+New `expose` config field:
+
+- `expose: "hap"` — HomeKit via HAP only (default)
+- `expose: "matter"` — Matter only (replaces HAP)
+- `expose: "both"` — HAP for Apple Home **and** Matter for Alexa/Google at the same time
+
+In `expose: "both"` mode both platforms run concurrently sharing the same Homebridge session. HAP handles Apple Home with full HeaterCooler capabilities; Matter exposes the Thermostat to Alexa/Google Home. Matter errors are caught so HAP stays active on failure.
+
+`enableMatter: true` remains a backward-compatible alias for `expose: "matter"`.
+
+Also includes the `fix(lan)` from beta.53 which was missing from the npm build: corrected `ac_hdir` byte parsing in LAN state response.
+
 ## v0.0.12-beta.54 - 2026-06-27
 
 ### feat(platform): add `expose` mode — run HAP + Matter simultaneously
