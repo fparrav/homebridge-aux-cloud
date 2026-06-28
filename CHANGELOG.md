@@ -1,20 +1,46 @@
 # Changelog
 
-## v0.0.12-beta.54 - 2026-06-28
+## v0.0.12 - 2026-06-27
 
-## feat(platform): expose mode — HAP + Matter simultaneously
+### feat(platform): add `expose` mode — run HAP + Matter simultaneously
 
-New `expose` config field:
+New `expose` configuration field replacing the `enableMatter` boolean:
 
 - `expose: "hap"` — HomeKit via HAP only (default)
-- `expose: "matter"` — Matter only (replaces HAP)
-- `expose: "both"` — HAP for Apple Home **and** Matter for Alexa/Google at the same time
+- `expose: "matter"` — Matter only, replaces HAP accessories
+- `expose: "both"` — HAP for Apple Home + Matter for Alexa/Google simultaneously
 
-In `expose: "both"` mode both platforms run concurrently sharing the same Homebridge session. HAP handles Apple Home with full HeaterCooler capabilities; Matter exposes the Thermostat to Alexa/Google Home. Matter errors are caught so HAP stays active on failure.
+`enableMatter: true` is preserved as a backward-compatible alias for `expose: "matter"`.
 
-`enableMatter: true` remains a backward-compatible alias for `expose: "matter"`.
+### fix(lan): correct horizontal swing direction byte in LAN state response
 
-Also includes the `fix(lan)` from beta.53 which was missing from the npm build: corrected `ac_hdir` byte parsing in LAN state response.
+`ac_hdir` was incorrectly parsed from byte 12 (same as `ac_vdir`). Fixed to byte 13, bits 7–5.
+
+### fix(hap): inverted swing mode constants
+
+AUX AC protocol uses reversed convention: `ac_vdir/hdir = 0` → swing ACTIVE. `ON/OFF` constants were swapped for both axes.
+
+### fix(hap): illegal value warnings on first accessory creation
+
+HeaterCooler default values (HeatingThreshold=0, RotationSpeed=0) violated configured `minValue`. Fixed with `updateValue()` after `setProps()`.
+
+### fix(matter): pending guard missing in Matter sendCommand
+
+`sendCommand()` did not register the pending guard, allowing poll to overwrite optimistic state. Fixed to match the HAP pattern.
+
+### fix(matter): wrong device type caused "switch" icon in Apple Home
+
+`clusters.onOff` in `deviceTypes.Thermostat` inverted the hierarchy. Removed; power now via `systemMode=0`.
+
+### fix(matter): fanControl cluster missing from Matter accessory
+
+Handlers existed but `fanControl` cluster was not registered in `toAccessory()`. Fixed with `fanModeSequence=0`.
+
+### fix(matter): stale Matter persistence caused "accessory not found" on refresh
+
+On identity conflict, unregister + re-register fresh to clear corrupted persistence from failed transactions.
+
+---
 
 ## v0.0.12-beta.54 - 2026-06-27
 
