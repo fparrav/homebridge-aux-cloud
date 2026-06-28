@@ -1,5 +1,29 @@
 # Changelog
 
+## v0.0.12 - 2026-06-28
+
+## What's new in v0.0.12
+
+### feat(platform): `expose` mode — HAP + Matter simultaneously
+
+New `expose` config field replaces the `enableMatter` boolean:
+
+- `expose: "hap"` — HomeKit via HAP only (default)
+- `expose: "matter"` — Matter only, replaces HAP accessories  
+- `expose: "both"` — HAP for Apple Home **+** Matter for Alexa/Google simultaneously
+
+`enableMatter: true` is preserved as a backward-compatible alias.
+
+### Bug fixes
+
+- **fix(lan)**: `ac_hdir` was parsed from the wrong byte (12 instead of 13), causing horizontal swing to mirror vertical swing after every LAN poll
+- **fix(hap)**: swing mode constants were inverted — AUX AC protocol uses `0` = swing active, `1` = fixed
+- **fix(hap)**: illegal value warnings on first HeaterCooler creation (default values violated configured `minValue`)
+- **fix(matter)**: pending guard missing in `sendCommand()` — poll overwrote optimistic state
+- **fix(matter)**: `clusters.onOff` in Thermostat caused wrong icon and "switch" classification in Apple Home
+- **fix(matter)**: `fanControl` cluster was not registered in `toAccessory()`
+- **fix(matter)**: stale Matter persistence caused "accessory not found" errors after rollback
+
 ## v0.0.12 - 2026-06-27
 
 ### feat(platform): add `expose` mode — run HAP + Matter simultaneously
