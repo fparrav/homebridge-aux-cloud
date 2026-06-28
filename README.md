@@ -135,6 +135,7 @@ Use this mode to get the responsiveness of local control while retaining cloud a
 | `temperatureUnit` | `C` / `F` | `C` | Display unit for setpoints and ambient temp |
 | `temperatureStep` | `0.5` / `1` | `0.5` | Setpoint increment (0.5 replicates AC Freedom) |
 | `featureSwitches` | array | `[]` | Extra HomeKit switches: `screenDisplay`, `mildewProof`, `clean`, `health`, `eco`, `sleep` |
+| `expose` | `hap` / `matter` / `both` | `hap` | Platform exposure mode. `hap` = HomeKit only (default). `matter` = Matter only (replaces HAP). `both` = HAP for Apple Home + Matter for Alexa/Google simultaneously. Requires Homebridge 2.x with Matter plugin for `matter` or `both`. |
 | `commandRetryCount` | integer (0–5) | `2` | Cloud command retry attempts before failing |
 | `commandTimeoutMs` | integer (1000–15000) | `5000` | Per-attempt cloud command timeout in ms |
 | `includeDeviceIds` | string[] | `[]` | Only expose these cloud endpoint IDs (empty = all) |

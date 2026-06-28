@@ -1,5 +1,23 @@
 # Changelog
 
+## v0.0.12-beta.54 - 2026-06-27
+
+### feat(platform): add `expose` mode — run HAP + Matter simultaneously
+
+New `expose` configuration field replaces the `enableMatter` boolean:
+
+- `expose: "hap"` — HomeKit via HAP only (default, same as before)
+- `expose: "matter"` — Matter only, replaces HAP accessories
+- `expose: "both"` — HAP for Apple Home + Matter for Alexa/Google simultaneously
+
+In `expose: "both"` mode the proxy instantiates both platforms concurrently.
+HAP receives cached accessories and drives all `configureAccessory` calls; the
+Matter platform starts independently without unregistering HAP accessories.
+Matter initialization errors are caught so HAP remains active on failure.
+
+The `enableMatter: true` boolean is preserved as a backward-compatible alias for
+`expose: "matter"`.
+
 ## v0.0.12-beta.53 - 2026-06-27
 
 ### fix(lan): correct horizontal swing direction byte in LAN state response

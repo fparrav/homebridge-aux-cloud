@@ -37,6 +37,10 @@ export interface AuxCloudPlatformConfig extends PlatformConfig {
   // Local (LAN) control settings
   controlStrategy?: 'local-first' | 'cloud-only';
   localControlEnabled?: boolean;
+
+  // Exposure mode: 'hap' (default), 'matter', or 'both' (HAP + Matter simultaneously)
+  expose?: 'hap' | 'matter' | 'both';
+  // Legacy aliases kept for backward compatibility
   enableMatter?: boolean;
   enableHomeKit?: boolean;
   devices?: Array<{

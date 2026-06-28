@@ -127,18 +127,29 @@
                 "default": false,
                 "description": "When enabled, commands are sent directly to the device over LAN when possible, falling back to AUX Cloud if LAN is unavailable."
             },
-             "enableMatter": {
-                 "title": "Enable Matter Support",
-                 "type": "boolean",
-                 "default": false,
-                 "description": "When enabled, exposes AUX ACs as Matter accessories for Apple Home, Google Home, etc. Requires Homebridge with Matter plugin installed."
-             },
-             "enableHomeKit": {
-                 "title": "Enable HomeKit (HAP) Registration",
-                 "type": "boolean",
-                 "default": true,
-                 "description": "When disabled, ACs are not registered as HomeKit accessories via HAP. Useful when using Matter-only mode."
-             },
+            "expose": {
+                "title": "Exposure Mode",
+                "type": "string",
+                "default": "hap",
+                "enum": [
+                    "hap",
+                    "matter",
+                    "both"
+                ],
+                "description": "How to expose ACs to smart home platforms. 'hap' = HomeKit only (default). 'matter' = Matter only (replaces HAP). 'both' = HAP for Apple Home + Matter for Alexa/Google simultaneously. Requires Homebridge 2.x with Matter plugin for 'matter' or 'both'."
+            },
+            "enableMatter": {
+                "title": "Enable Matter (legacy)",
+                "type": "boolean",
+                "default": false,
+                "description": "Deprecated — use 'expose' instead. When true, equivalent to expose=matter."
+            },
+            "enableHomeKit": {
+                "title": "Enable HomeKit (HAP) Registration (legacy)",
+                "type": "boolean",
+                "default": true,
+                "description": "Deprecated — use 'expose' instead."
+            },
             "devices": {
                 "title": "Device Mappings",
                 "type": "array",
