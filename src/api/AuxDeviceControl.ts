@@ -175,7 +175,7 @@ export class AuxDeviceControl {
         scrdisp:   (decrypted[22] >> 4) & 0x01,
         mldprf:    (decrypted[22] >> 3) & 0x01,
         ac_health: (decrypted[20] >> 1) & 0x01,
-        ac_hdir:   decrypted[12] & 0x07,
+        ac_hdir:   (decrypted[13] >> 5) & 0x07,
         // Translate wire fan speed (1=high,2=med,3=low,4=turbo,5=auto) → AuxFanSpeed.
         // When mute bit is set, override with AuxFanSpeed.MUTE(5).
         ac_mark:   wireMute ? 5 : broadlinkWireToAuxFanSpeed(wireFanSpeed),

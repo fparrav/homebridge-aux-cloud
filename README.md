@@ -135,11 +135,13 @@ Use this mode to get the responsiveness of local control while retaining cloud a
 | `temperatureUnit` | `C` / `F` | `C` | Display unit for setpoints and ambient temp |
 | `temperatureStep` | `0.5` / `1` | `0.5` | Setpoint increment (0.5 replicates AC Freedom) |
 | `featureSwitches` | array | `[]` | Extra HomeKit switches: `screenDisplay`, `mildewProof`, `clean`, `health`, `eco`, `sleep` |
-| `commandRetryCount` | integer (0–5) | `2` | Cloud command retry attempts |
-| `commandTimeoutMs` | integer (1000–15000) | `5000` | Cloud command timeout in ms |
+| `commandRetryCount` | integer (0–5) | `2` | Cloud command retry attempts before failing |
+| `commandTimeoutMs` | integer (1000–15000) | `5000` | Per-attempt cloud command timeout in ms |
 | `includeDeviceIds` | string[] | `[]` | Only expose these cloud endpoint IDs (empty = all) |
 | `excludeDeviceIds` | string[] | `[]` | Hide these cloud endpoint IDs |
 | `devices` | array | `[]` | LAN device list (see below) |
+
+> **`commandRetryCount` and `commandTimeoutMs`** apply only to cloud commands. They also determine the *pending guard* duration — the window during which HomeKit poll results are ignored to protect the optimistic UI state after a command. Formula: `commandTimeoutMs × (commandRetryCount + 1) + 3000 ms`. With defaults this is 18 s. Reduce `commandTimeoutMs` or `commandRetryCount` if HomeKit takes too long to reflect command failures.
 
 > **Phone number login:** The AUX Cloud API requires an email address as username. If your account was created with a phone number, you must associate an email address first: open the **AC Freedom** app → Profile → Account Settings → add an email address. Then use that email as `username` in this plugin. See [issue #5](https://github.com/fparrav/homebridge-aux-cloud/issues/5).
 

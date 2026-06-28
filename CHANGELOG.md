@@ -1,5 +1,24 @@
 # Changelog
 
+## v0.0.12-beta.53 - 2026-06-27
+
+### fix(lan): correct horizontal swing direction byte in LAN state response
+
+The `ac_hdir` (horizontal swing direction) field was incorrectly parsed from
+byte 12 of the decrypted state response — the same byte as `ac_vdir` (vertical
+swing). The correct source is byte 13, bits 7–5, matching the SET command format
+where horizontal fixation is placed at `payload[11] = (hdir & 0x07) << 5`.
+
+This caused horizontal swing control to mirror the vertical swing value after
+every LAN state poll.
+
+### docs: expand commandRetryCount / commandTimeoutMs documentation
+
+Added an explanation of the pending guard formula:
+`commandTimeoutMs × (commandRetryCount + 1) + 3000 ms` (18 s with defaults).
+Clarified that these parameters apply only to cloud commands. Updated descriptions
+in the configuration table.
+
 ## v0.0.12-beta.52 - 2026-06-06
 
 ### fix(hap): inverted swing mode in HAP — AUX AC protocol convention reversed
