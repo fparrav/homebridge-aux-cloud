@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.0.13 - 2026-07-29
+
+### fix(hap): protect cloud-only accessories from unregister on cloud fetch failure
+
+If Homebridge restarts (crash, redeploy, container recreation) and the first AUX Cloud fetch after startup fails transiently (DNS, timeout, service maintenance), cloud-only devices were incorrectly treated as removed from the account and their HomeKit pairing was unregistered — losing room assignment, custom names, and automations tied to that accessory.
+
+`reconcileAccessories` now only unregisters a cloud-backed accessory after a successful cloud fetch confirms the device is actually gone from the account. LAN-only accessories (identified by their deterministic `lan-<mac>` endpointId) keep their existing removal behavior unchanged.
+
 ## v0.0.12 - 2026-06-28
 
 ## What's new in v0.0.12
