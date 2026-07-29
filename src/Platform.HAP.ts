@@ -366,6 +366,7 @@ export class AuxCloudHAPPlatform implements DynamicPlatformPlugin, IAuxCloudPlat
 
     try {
       let cloudDevices: AuxDevice[] = [];
+      let cloudFetchSucceeded = false;
 
       try {
         await this.client.ensureLoggedIn(this.config.username!, this.config.password!);
@@ -374,6 +375,7 @@ export class AuxCloudHAPPlatform implements DynamicPlatformPlugin, IAuxCloudPlat
           excludeIds: this.excludeIds,
         });
         this.lastKnownCloudDevices = cloudDevices; // update cache
+        cloudFetchSucceeded = true;
         this.log.debug('Fetched %d AUX Cloud devices', cloudDevices.length);
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
@@ -410,14 +412,14 @@ export class AuxCloudHAPPlatform implements DynamicPlatformPlugin, IAuxCloudPlat
       }
 
       if (allDevices.length > 0) {
-        this.reconcileAccessories(allDevices);
+        this.reconcileAccessories(allDevices, cloudFetchSucceeded);
       }
     } finally {
       this.isSyncing = false;
     }
   }
 
-  private reconcileAccessories(devices: AuxDevice[]): void {
+  private reconcileAccessories(devices: AuxDevice[], cloudFetchSucceeded: boolean): void {
     const seen = new Set<string>();
 
     for (const device of devices) {
@@ -494,7 +496,17 @@ export class AuxCloudHAPPlatform implements DynamicPlatformPlugin, IAuxCloudPlat
     }
 
     if (this.enableHomeKit) {
-      const staleAccessories = this.accessories.filter((accessory) => !seen.has(accessory.UUID));
+      const staleAccessories = this.accessories.filter((accessory) => {
+        if (seen.has(accessory.UUID)) return false;
+        if (cloudFetchSucceeded) return true;
+        // Cloud fetch failed this round: only LAN-only accessories (identified by the
+        // deterministic "lan-<mac>" endpointId, independent of the current config) are
+        // stale candidates. Cloud-backed accessories are protected until a successful
+        // fetch confirms they no longer exist in the account.
+        const context = accessory.context as { device?: { endpointId?: string } };
+        const endpointId = context.device?.endpointId;
+        return endpointId !== undefined && endpointId.startsWith('lan-');
+      });
       if (staleAccessories.length > 0) {
         this.log.info('Removing %d stale AUX Cloud accessories', staleAccessories.length);
         this.api.unregisterPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, staleAccessories);
