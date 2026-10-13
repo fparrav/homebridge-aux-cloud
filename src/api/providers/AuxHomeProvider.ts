@@ -91,7 +91,7 @@ export class AuxHomeProvider implements AuxProvider {
 
   constructor(options: AuxHomeProviderOptions = {}) {
     this.restClient = options.restClient ?? new AuxHomeRestClient({ requestTimeoutMs: options.requestTimeoutMs });
-    this.mqttSessionFactory = options.mqttSessionFactory ?? ((session) => new AuxHomeMqttSession(session));
+    this.mqttSessionFactory = options.mqttSessionFactory ?? ((session) => new AuxHomeMqttSession({ ...session, logger: options.logger }));
     this.commandTimeoutMs = options.commandTimeoutMs ?? 5_000;
     this.now = options.now ?? (() => new Date());
   }

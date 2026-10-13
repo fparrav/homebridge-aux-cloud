@@ -1,3 +1,4 @@
+import type { Logger } from 'homebridge';
 import mqtt from 'mqtt';
 import { Duplex } from 'node:stream';
 import { connect as connectTls } from 'node:tls';
@@ -48,6 +49,7 @@ export interface AuxHomeMqttSessionOptions {
   token: string;
   connector?: (url: string, options: AuxHomeMqttConnectOptions) => AuxHomeMqttClient;
   jitter?: () => number;
+  logger?: Pick<Logger, 'warn'>;
 }
 
 export function buildMqttCredentials(uid: string, token: string): AuxHomeMqttCredentials {
@@ -57,6 +59,8 @@ export function buildMqttCredentials(uid: string, token: string): AuxHomeMqttCre
     password: token,
   };
 }
+
+const CERTIFICATE_REJECTED_MESSAGE = 'AUX Home MQTT TLS certificate rejected';
 
 export function isAcceptedAuxHomeBrokerCertificate(fingerprint256: string | undefined): boolean {
   return fingerprint256?.toUpperCase() === AUX_HOME_MQTT_CERT_FINGERPRINT256;
@@ -107,7 +111,7 @@ function createPinnedTlsStream(): Duplex {
   socket.once('secureConnect', () => {
     const certificate = socket.getPeerCertificate();
     if (!isAcceptedAuxHomeBrokerCertificate(certificate.fingerprint256)) {
-      stream.destroy(new Error('AUX Home MQTT TLS certificate rejected'));
+      stream.destroy(new Error(CERTIFICATE_REJECTED_MESSAGE));
       return;
     }
     verified = true;
@@ -150,6 +154,10 @@ export class AuxHomeMqttSession {
 
   private readonly jitter: () => number;
 
+  private readonly logger?: Pick<Logger, 'warn'>;
+
+  private certificateWarningLogged = false;
+
   private readonly listeners = new Set<(message: AuxHomeMqttMessage) => void>();
   private readonly authenticationFailureListeners = new Set<(error: Error) => void>();
   private readonly connectedListeners = new Set<() => void>();
@@ -173,6 +181,7 @@ export class AuxHomeMqttSession {
     this.credentials = buildMqttCredentials(options.uid, options.token);
     this.connector = options.connector ?? connectPinnedMqtt;
     this.jitter = options.jitter ?? (() => Math.random() * 0.2);
+    this.logger = options.logger;
   }
 
   public connect(devices: readonly AuxHomeMqttDevice[]): void {
@@ -309,6 +318,10 @@ export class AuxHomeMqttSession {
     const details = value as { code?: unknown; reasonCode?: unknown; message?: unknown };
     const code = Number(details.code ?? details.reasonCode);
     const message = typeof details.message === 'string' ? details.message.toLowerCase() : '';
+    if (typeof details.message === 'string' && details.message.includes(CERTIFICATE_REJECTED_MESSAGE)) {
+      this.warnCertificateRejected();
+      return;
+    }
     if (![4, 5, 134, 135].includes(code) && !/auth|not authorized|bad user/.test(message)) {
       return;
     }
@@ -322,6 +335,18 @@ export class AuxHomeMqttSession {
     for (const listener of this.authenticationFailureListeners) {
       listener(sanitized);
     }
+  }
+
+  private warnCertificateRejected(): void {
+    if (this.certificateWarningLogged) {
+      return;
+    }
+    this.certificateWarningLogged = true;
+    this.logger?.warn(
+      'AUX Home MQTT: the broker certificate does not match the pinned fingerprint, so live updates are disabled '
+      + 'and the plugin keeps retrying. AUX may have rotated its certificate; please report it at '
+      + 'https://github.com/fparrav/homebridge-aux-cloud/issues.',
+    );
   }
 
   private scheduleReconnect(): void {

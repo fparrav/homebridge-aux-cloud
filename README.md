@@ -121,6 +121,7 @@ MQTT is the primary source of live state. Changes from the physical remote are p
 - Confirm `provider` is `aux-home`, `region` is `eu`, and both `username` and `password` are set in Homebridge.
 - After changing credentials or provider settings, restart Homebridge and allow the next periodic refresh while a reconnect is in progress.
 - For a login or connectivity problem, record only the time, the provider error class/message, and the installed plugin version. Never attach raw configuration files, login responses, account/session values, device IDs, or MQTT diagnostics containing identifiers.
+- Live updates use an MQTT connection whose broker certificate is pinned by fingerprint. If AUX rotates that certificate, Homebridge logs `the broker certificate does not match the pinned fingerprint`; commands and periodic refreshes may still work, but live updates stop until the plugin is updated. Please open an issue when you see it.
 - If physical-remote changes do not appear promptly, note whether Homebridge later catches up on its periodic refresh; this helps distinguish a live-update connection issue from device-state discovery without exposing private data.
 
 ---

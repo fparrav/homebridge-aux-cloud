@@ -264,6 +264,25 @@ describe('AuxHomeMqttSession', () => {
     expect(failures[0].message).not.toContain('sensitive');
   });
 
+  test('warns once when the pinned broker certificate is rejected, without treating it as an auth failure', () => {
+    const { clients, connector } = createConnector();
+    const warn = jest.fn();
+    const session = new AuxHomeMqttSession({
+      uid: 'sensitive-uid', token: 'sensitive-token', connector, logger: { warn },
+    });
+    const failures: Error[] = [];
+    session.onAuthenticationFailure((error) => failures.push(error));
+    session.connect([{ did: 'sensitive-device' }]);
+
+    clients[0].emit('error', new Error('AUX Home MQTT TLS certificate rejected'));
+    clients[0].emit('error', new Error('AUX Home MQTT TLS certificate rejected'));
+
+    expect(failures).toHaveLength(0);
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(warn.mock.calls[0][0]).toContain('pinned fingerprint');
+    expect(warn.mock.calls[0][0]).not.toContain('sensitive');
+  });
+
   test('stops terminally after authentication rejection and never reconnects after broker close', () => {
     jest.useFakeTimers();
     const { clients, connector } = createConnector();
