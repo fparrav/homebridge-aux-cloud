@@ -1,5 +1,16 @@
 # Changelog
 
+## v0.0.14-beta.1 - 2026-10-13
+
+### feat(aux-home): experimental AUX Home provider (EU only)
+
+Adds an AUX Home cloud provider alongside the existing AC Freedom one, contributed by @skymike (#9). AC Freedom remains the default; set `provider: "aux-home"` to try the new one.
+
+- AUX Home login, REST client, family/shared-device discovery and device control.
+- Live state updates over MQTT, so changes made in the AUX Home app show up in HomeKit without waiting for the next poll.
+- EU region only. AUX Cloud allows a single session per account, so use a second AUX account that the home is shared with for Homebridge.
+- The MQTT broker certificate is pinned by fingerprint. If AUX rotates it, the plugin now logs a clear warning (once) instead of failing silently.
+
 ## v0.0.13 - 2026-07-29
 
 ### fix(hap): protect cloud-only accessories from unregister on cloud fetch failure
