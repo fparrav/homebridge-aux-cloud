@@ -12,6 +12,20 @@ export type FeatureSwitchKey =
   | 'eco'
   | 'sleep';
 
+/**
+ * Tri-state override for the screen display:
+ * - 'none'      -> no override, the HomeKit/Matter switch controls it
+ * - 'forceOn'   -> scrdisp=1 is sent with every command
+ * - 'forceOff'  -> scrdisp=0 is sent with every command
+ */
+export type ScreenDisplayForceMode = 'none' | 'forceOn' | 'forceOff';
+
+export interface ForcedFeatureFlags {
+  mildewProof: boolean;
+  clean: boolean;
+  screenDisplay: ScreenDisplayForceMode;
+}
+
 export const ALLOWED_FEATURE_SWITCHES: FeatureSwitchKey[] = [
   'screenDisplay',
   'mildewProof',
@@ -59,6 +73,9 @@ export interface AuxCloudPlatformConfig extends PlatformConfig {
     name?: string;
     controlStrategy?: 'local' | 'cloud';
     bridge?: 'HAP' | 'Matter';
+    forceMildewProof?: boolean;
+    forceClean?: boolean;
+    forceScreenDisplay?: ScreenDisplayForceMode;
   }>;
 }
 
@@ -74,6 +91,7 @@ export interface IAuxCloudPlatform {
   completePendingCommand(endpointId: string): void;
   schedulePendingCommandCompletion(endpointId: string, delayMs: number): void;
   isStaleState(endpointId: string): boolean;
+  getForcedFeatures(endpointId: string, mac?: string): ForcedFeatureFlags | undefined;
   startDeviceCommand(device: AuxDevice, params: Record<string, number>, retryCount?: number): void;
   getDevice(endpointId: string): AuxDevice | undefined;
 }

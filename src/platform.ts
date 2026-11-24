@@ -12,18 +12,13 @@ import { AuxApiError, type AuxDevice } from './api/AuxCloudClient';
 import { AuxDeviceControl } from './api/AuxDeviceControl';
 import { createProvider } from './api/providers/createProvider';
 import type { AuxProvider, AuxProviderKind } from './api/providers/AuxProvider';
+import { ForcedFeatureRegistry } from './forcedFeatures';
 import { AuxCloudPlatformAccessory } from './platformAccessory';
 import { MatterThermostatAccessory } from './MatterThermostatAccessory';
 import { PLATFORM_NAME, PLUGIN_NAME } from './settings';
-import type { AuxCloudPlatformDependencies } from './types';
+import type { AuxCloudPlatformDependencies, FeatureSwitchKey, ForcedFeatureFlags, ScreenDisplayForceMode } from './types';
 
-export type FeatureSwitchKey =
-   | 'screenDisplay'
-   | 'mildewProof'
-   | 'clean'
-   | 'health'
-   | 'eco'
-   | 'sleep';
+export type { FeatureSwitchKey } from './types';
 
 const ALLOWED_FEATURE_SWITCHES: FeatureSwitchKey[] = [
    'screenDisplay',
@@ -63,6 +58,9 @@ export interface AuxCloudPlatformConfig extends PlatformConfig {
     controlStrategy?: 'local' | 'cloud';
     enableHAP?: boolean;
     enableMatter?: boolean;
+    forceMildewProof?: boolean;
+    forceClean?: boolean;
+    forceScreenDisplay?: ScreenDisplayForceMode;
    }>;
 }
 
@@ -86,6 +84,8 @@ export class AuxCloudPlatform implements DynamicPlatformPlugin {
   private readonly includeIds: Set<string>;
 
   private readonly excludeIds: Set<string>;
+
+  private readonly forcedFeatures: ForcedFeatureRegistry;
 
   private readonly credentialsConfigured: boolean;
 
@@ -141,6 +141,7 @@ export class AuxCloudPlatform implements DynamicPlatformPlugin {
 
     this.includeIds = new Set(this.config.includeDeviceIds ?? []);
     this.excludeIds = new Set(this.config.excludeDeviceIds ?? []);
+    this.forcedFeatures = new ForcedFeatureRegistry(this.config, this.log);
 
     this.temperatureUnit = this.config.temperatureUnit === 'F' ? 'F' : 'C';
     const configuredStep = this.config.temperatureStep === 1 ? 1 : 0.5;
@@ -255,6 +256,11 @@ export class AuxCloudPlatform implements DynamicPlatformPlugin {
     this.devicesById.set(device.endpointId, device);
    }
 
+  public getForcedFeatures(endpointId: string, mac?: string): ForcedFeatureFlags | undefined {
+    return this.forcedFeatures.get(endpointId, mac);
+  }
+
+
    /**
     * @deprecated Mantener por compatibilidad con setAuxMode legacy.
     * Usar startDeviceCommand() para nuevos handlers.
@@ -281,7 +287,10 @@ export class AuxCloudPlatform implements DynamicPlatformPlugin {
           await this.provider.ensureLoggedIn(this.config.username!, this.config.password!);
          }
         try {
-          await this.deviceControl.sendCommand(device, params, {
+          await this.deviceControl.sendCommand(
+            device,
+            this.forcedFeatures.apply(device, params),
+            {
             globalStrategy: this.config.controlStrategy,
             localRetryCount: retryCount,
             cloudRetryCount: retryCount,

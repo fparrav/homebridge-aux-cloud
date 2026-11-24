@@ -197,6 +197,40 @@ Use this mode to get the responsiveness of local control while retaining cloud a
 | `ip` | No | Static IP — use if discovery doesn't find the device |
 | `endpointId` | For cloud+LAN | AUX Cloud endpoint ID for this device |
 | `controlStrategy` | No | Override per device: `local` or `cloud` |
+| `forceMildewProof` | No | Send `mldprf: 1` with the power-off command (see below) |
+| `forceClean` | No | Send `ac_clean: 1` with the power-off command (see below) |
+| `forceScreenDisplay` | No | `none` / `forceOn` / `forceOff` — override `scrdisp` on every command |
+
+> **Identifying a device:** a `devices` entry matches by `endpointId` **or** `mac` — either one is enough for per-device options such as `forceMildewProof`.
+
+### Forced feature switches
+
+**Mildew Proof (`mldprf`) and Self Clean (`ac_clean`).** In the AC Freedom app these are not standing settings: they travel in the payload that **turns the unit off**, and the unit runs the post-off cycle (dry the evaporator / self-clean). A partial payload, or Siri switching off the room's accessories, can therefore drop them silently.
+
+With `forceMildewProof: true` / `forceClean: true` the plugin:
+
+- injects `mldprf: 1` (or `ac_clean: 1`) into **every command that powers the device off** (`pwr: 0`), including commands coming from HomeKit, Matter, scenes or automations;
+- exposes the corresponding HomeKit/Matter switch for that device even if `featureSwitches` is empty, and reports it as **On**; an Off request is ignored and logged;
+- does nothing for models that never report the parameter — it logs a warning once and ignores the setting.
+
+**Screen Display (`scrdisp`).** The display is a persistent setting, so it takes three states:
+
+| Value | Behaviour |
+|-------|-----------|
+| `none` (default) | No override; the `Screen Display` switch controls it |
+| `forceOn` | `scrdisp: 1` is sent with every command; the switch reports On and Off requests are ignored |
+| `forceOff` | `scrdisp: 0` is sent with every command; the switch reports Off and On requests are ignored |
+
+```json
+"devices": [
+  {
+    "endpointId": "dev2app/.../state",
+    "forceMildewProof": true,
+    "forceClean": true,
+    "forceScreenDisplay": "forceOff"
+  }
+]
+```
 
 ---
 
@@ -232,6 +266,7 @@ When `localControlEnabled: true`, the plugin broadcasts a UDP discovery packet a
   - Fan speed slider with dedicated Auto switch
   - Dry Mode and Fan Mode switches (mutually exclusive, fall back to Auto when off)
   - Optional switches: screen display, mildew proof, self-clean, health, eco, sleep
+  - Per-device forced feature switches: `forceMildewProof`, `forceClean` and `forceScreenDisplay`
 - LAN-only devices work with no internet and no AUX Cloud account.
 - Cloud + LAN hybrid mode with automatic fallback.
 - Fast local polling with configurable interval.

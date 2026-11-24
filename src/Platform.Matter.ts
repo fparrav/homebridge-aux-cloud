@@ -10,6 +10,7 @@ import { AuxApiError, type AuxDevice } from './api/AuxCloudClient';
 import { AuxDeviceControl } from './api/AuxDeviceControl';
 import { createProvider } from './api/providers/createProvider';
 import type { AuxProvider } from './api/providers/AuxProvider';
+import { ForcedFeatureRegistry } from './forcedFeatures';
 import { MatterThermostatAccessory } from './MatterThermostatAccessory';
 import { PLATFORM_NAME, PLUGIN_NAME } from './settings';
 import {
@@ -17,6 +18,7 @@ import {
   type AuxCloudPlatformConfig,
   type AuxCloudPlatformDependencies,
   type FeatureSwitchKey,
+  type ForcedFeatureFlags,
   type IAuxCloudPlatform,
 } from './types';
 
@@ -31,6 +33,8 @@ export class AuxCloudMatterPlatform implements DynamicPlatformPlugin, IAuxCloudP
   private readonly includeIds: Set<string>;
 
   private readonly excludeIds: Set<string>;
+
+  private readonly forcedFeatures: ForcedFeatureRegistry;
 
   private readonly credentialsConfigured: boolean;
 
@@ -86,6 +90,7 @@ export class AuxCloudMatterPlatform implements DynamicPlatformPlugin, IAuxCloudP
 
     this.includeIds = new Set(this.config.includeDeviceIds ?? []);
     this.excludeIds = new Set(this.config.excludeDeviceIds ?? []);
+    this.forcedFeatures = new ForcedFeatureRegistry(this.config, this.log);
 
     this.temperatureUnit = this.config.temperatureUnit === 'F' ? 'F' : 'C';
     const configuredStep = this.config.temperatureStep === 1 ? 1 : 0.5;
@@ -519,6 +524,10 @@ export class AuxCloudMatterPlatform implements DynamicPlatformPlugin, IAuxCloudP
     this.devicesById.set(device.endpointId, device);
   }
 
+  public getForcedFeatures(endpointId: string, mac?: string): ForcedFeatureFlags | undefined {
+    return this.forcedFeatures.get(endpointId, mac);
+  }
+
   /**
    * Envía params al dispositivo con local/cloud selection y retry.
    * Delega a AuxDeviceControl para selección automática.
@@ -533,7 +542,10 @@ export class AuxCloudMatterPlatform implements DynamicPlatformPlugin, IAuxCloudP
   await this.provider.ensureLoggedIn(this.config.username!, this.config.password!);
     }
     try {
-      await this.deviceControl.sendCommand(device, params, {
+      await this.deviceControl.sendCommand(
+        device,
+        this.forcedFeatures.apply(device, params),
+        {
         globalStrategy: this.config.controlStrategy,
         localRetryCount: retryCount,
         cloudRetryCount: retryCount,

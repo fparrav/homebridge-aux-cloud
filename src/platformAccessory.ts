@@ -40,6 +40,7 @@ import {
 } from './api/constants';
 import type { AuxDevice } from './api/AuxCloudClient';
 import type { AuxCloudPlatform, FeatureSwitchKey } from './platform';
+import type { ForcedFeatureFlags } from './types';
 
 interface AuxCloudAccessoryContext {
   device?: {
@@ -48,6 +49,8 @@ interface AuxCloudAccessoryContext {
     friendlyName?: string;
   };
 }
+
+const NO_FORCED_FEATURES: ForcedFeatureFlags = { mildewProof: false, clean: false, screenDisplay: 'none' };
 
 const MIN_TARGET_TEMPERATURE_C = 16;
 const MAX_TARGET_TEMPERATURE_C = 30;
@@ -154,6 +157,8 @@ export class AuxCloudPlatformAccessory {
 
   private supportsComfortableWind = false;
 
+  private forcedFeatures: ForcedFeatureFlags = NO_FORCED_FEATURES;
+
   private hasFault = false;
 
   private fanAutoService?: Service;
@@ -231,6 +236,7 @@ export class AuxCloudPlatformAccessory {
     this.supportsSwingVertical = typeof device.params[AC_SWING_VERTICAL] === 'number';
     this.supportsSwingHorizontal = typeof device.params[AC_SWING_HORIZONTAL] === 'number';
     this.supportsComfortableWind = typeof device.params[AC_COMFORTABLE_WIND] === 'number';
+    this.forcedFeatures = this.platform.getForcedFeatures?.(device.endpointId, device.mac) ?? NO_FORCED_FEATURES;
     const currentFan = device.params[AC_FAN_SPEED];
     if (typeof currentFan === 'number' && currentFan !== AuxFanSpeed.AUTO) {
       this.lastManualFanSpeed = currentFan as AuxFanSpeed;
@@ -356,8 +362,9 @@ export class AuxCloudPlatformAccessory {
 
     (Object.keys(FEATURE_SWITCH_CONFIG) as FeatureSwitchKey[]).forEach((feature) => {
       const definition = FEATURE_SWITCH_CONFIG[feature];
+      const forced = this.forcedValueForParam(definition.param);
       const supported = typeof this.device?.params[definition.param] === 'number';
-      const shouldExpose = this.featureSwitches.has(feature) && supported;
+      const shouldExpose = supported && (this.featureSwitches.has(feature) || forced !== undefined);
       const existing = this.featureSwitchServices.get(feature);
 
       if (shouldExpose) {
@@ -789,12 +796,26 @@ export class AuxCloudPlatformAccessory {
       : this.platform.Characteristic.SwingMode.SWING_DISABLED;
   }
 
-  private async handleFeatureSwitchSet(feature: FeatureSwitchKey, enabled: boolean): Promise<void> {
+  private async handleFeatureSwitchSet(feature: FeatureSwitchKey, value: boolean): Promise<void> {
     if (!this.device) {
       return;
     }
 
     const definition = FEATURE_SWITCH_CONFIG[feature];
+    let enabled = Boolean(value);
+    const forced = this.forcedValueForParam(definition.param);
+
+    if (forced !== undefined && enabled !== forced) {
+      this.platform.log.warn(
+        '%s is forced %s for %s by configuration; ignoring the %s request.',
+        definition.label,
+        forced ? 'on' : 'off',
+        this.accessory.displayName,
+        enabled ? 'On' : 'Off',
+      );
+      enabled = forced;
+    }
+
     const payload = enabled ? definition.onPayload : definition.offPayload;
 
     // Aplicar estado optimista inmediatamente
@@ -813,7 +834,34 @@ export class AuxCloudPlatformAccessory {
     }
 
     const definition = FEATURE_SWITCH_CONFIG[feature];
+    const forced = this.forcedValueForParam(definition.param);
+    if (forced !== undefined) {
+      return forced;
+    }
+
     return this.device.params[definition.param] === 1;
+  }
+
+  /**
+   * Config override for a feature: true/false when the config forces it,
+   * undefined when the switch behaves normally.
+   */
+  private forcedValueForParam(param: string): boolean | undefined {
+    if (param === AC_MILDEW_PROOF) {
+      return this.forcedFeatures.mildewProof ? true : undefined;
+    }
+    if (param === AC_CLEAN) {
+      return this.forcedFeatures.clean ? true : undefined;
+    }
+    if (param === AC_SCREEN_DISPLAY) {
+      if (this.forcedFeatures.screenDisplay === 'forceOn') {
+        return true;
+      }
+      if (this.forcedFeatures.screenDisplay === 'forceOff') {
+        return false;
+      }
+    }
+    return undefined;
   }
 
   // ------------------------------------------------------------------

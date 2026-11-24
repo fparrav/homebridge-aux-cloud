@@ -211,6 +211,25 @@
                             "default": "HAP",
                             "enum": ["HAP", "Matter"],
                             "description": "Register this device as a HomeKit (HAP) or Matter accessory. Only one bridge type can be active per device."
+                        },
+                        "forceMildewProof": {
+                            "title": "Force Mildew Proof",
+                            "type": "boolean",
+                            "default": false,
+                            "description": "Always send mldprf=1 in the command that turns this device off, the same way the AC Freedom app does. The Mildew Proof switch is also exposed for this device and reports On; turning it off is ignored."
+                        },
+                        "forceClean": {
+                            "title": "Force Self Clean",
+                            "type": "boolean",
+                            "default": false,
+                            "description": "Always send ac_clean=1 in the command that turns this device off so the self-clean cycle runs after power off. The Self Clean switch is exposed for this device and reports On; turning it off is ignored."
+                        },
+                        "forceScreenDisplay": {
+                            "title": "Force Screen Display",
+                            "type": "string",
+                            "default": "none",
+                            "enum": ["none", "forceOn", "forceOff"],
+                            "description": "Override the screen display (scrdisp) on every command sent to this device: none = leave it to HomeKit, forceOn = always turn the display on, forceOff = always turn it off."
                         }
                     }
                 }

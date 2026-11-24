@@ -34,7 +34,7 @@ import {
   AuxFanSpeed,
   AuxProducts,
 } from './api/constants';
-import type { FeatureSwitchKey, IAuxCloudPlatform } from './types';
+import type { FeatureSwitchKey, ForcedFeatureFlags, IAuxCloudPlatform } from './types';
 import type { AuxDevice } from './api/AuxCloudClient';
 
 // Matter accessory configuration type (returned by toAccessory())
@@ -72,12 +72,15 @@ const THERMOSTAT_MODE_HEAT = 4;
 const THERMOSTAT_MODE_DRY = 6; // 6 = Precooling / dehumidification → Dry
 const THERMOSTAT_MODE_FAN_ONLY = 7; // 7 = Fan Only
 
+const NO_FORCED_FEATURES: ForcedFeatureFlags = { mildewProof: false, clean: false, screenDisplay: 'none' };
+
 export class MatterThermostatAccessory {
   private readonly api: API;
   private readonly log: Logger;
   private readonly platform: IAuxCloudPlatform;
   private device?: AuxDevice;
   private readonly endpointId: string;
+  private readonly forcedFeatures: ForcedFeatureFlags;
 
   constructor(
     platform: IAuxCloudPlatform,
@@ -88,6 +91,7 @@ export class MatterThermostatAccessory {
     this.platform = platform;
     this.device = device;
     this.endpointId = device.endpointId;
+    this.forcedFeatures = platform.getForcedFeatures?.(device.endpointId, device.mac) ?? NO_FORCED_FEATURES;
 
     if (this.platform.redactDeviceIdentifiers) {
       this.log.info('[Matter] Initialized Thermostat for "%s"', device.friendlyName);
@@ -411,7 +415,8 @@ export class MatterThermostatAccessory {
     ];
 
     for (const m of mappings) {
-      if (!featureSwitches.has(m.key as FeatureSwitchKey)) continue;
+      const forcedValue = this.forcedValueForParam(m.param);
+      if (!featureSwitches.has(m.key as FeatureSwitchKey) && forcedValue === undefined) continue;
       const supported = typeof this.device?.params?.[m.param] === 'number';
       if (!supported) continue;
 
@@ -443,8 +448,24 @@ export class MatterThermostatAccessory {
 
   private getSwitchState(param: string): number {
     if (!this.device) return 0;
+    const forced = this.forcedValueForParam(param);
+    if (forced !== undefined) return forced ? 1 : 0;
     const val = this.device.params?.[param];
     return val === 1 ? 1 : 0;
+  }
+
+  /**
+   * Config override for a feature: true/false when the config forces it,
+   * undefined when the switch behaves normally.
+   */
+  private forcedValueForParam(param: string): boolean | undefined {
+    if (param === AC_MILDEW_PROOF) return this.forcedFeatures.mildewProof ? true : undefined;
+    if (param === AC_CLEAN) return this.forcedFeatures.clean ? true : undefined;
+    if (param === AC_SCREEN_DISPLAY) {
+      if (this.forcedFeatures.screenDisplay === 'forceOn') return true;
+      if (this.forcedFeatures.screenDisplay === 'forceOff') return false;
+    }
+    return undefined;
   }
 
   private async handleSwitchSet(
@@ -454,8 +475,16 @@ export class MatterThermostatAccessory {
     request: { onOff: number },
   ): Promise<void> {
     if (!this.device) return;
-    const payload = request.onOff === 1 ? onPayload : offPayload;
-    this.log.info(`[Matter][${this.device.friendlyName}] Switch ${key}: ${request.onOff === 1 ? 'ON' : 'OFF'}`);
+    const requestedOn = request.onOff === 1;
+    const forced = this.forcedValueForParam(Object.keys(onPayload)[0]);
+    let payload = requestedOn ? onPayload : offPayload;
+    if (forced !== undefined && requestedOn !== forced) {
+      this.log.warn(
+        `[Matter][${this.device.friendlyName}] ${key} is forced ${forced ? 'on' : 'off'} by configuration; ignoring the ${requestedOn ? 'ON' : 'OFF'} request`,
+      );
+      payload = forced ? onPayload : offPayload;
+    }
+    this.log.info(`[Matter][${this.device.friendlyName}] Switch ${key}: ${requestedOn ? 'ON' : 'OFF'}`);
     await this.sendCommand(payload);
   }
 
