@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.0.14-beta.2 - 2026-11-24
+
+Per-device forced feature switches: `forceMildewProof`, `forceClean` and `forceScreenDisplay` (none/forceOn/forceOff). Mildew Proof and Self Clean are injected into every power-off command, the way the AUX Freedom app does; Screen Display is overridden on every command. See CHANGELOG for details.
+
 ## v0.0.14-beta.2 - 2026-11-23
 
 ### feat(platform): per-device forced feature switches
