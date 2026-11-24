@@ -1,5 +1,19 @@
 # Changelog
 
+## v0.0.14-beta.2 - 2026-11-23
+
+### feat(platform): per-device forced feature switches
+
+Some AUX features are not standing settings: Mildew Proof (`mldprf`) and Self Clean (`ac_clean`) travel in the payload that **turns the unit off**, and the post-off cycle is silently dropped when the off comes from a scene, an automation or a partial payload. The screen display (`scrdisp`) is persistent but can be reported inconsistently by some models.
+
+Three new per-device options in `devices[]` (matching by `endpointId` or `mac`):
+
+- `forceMildewProof: true` — injects `mldprf: 1` into every command that powers the device off (`pwr: 0`), whatever the source.
+- `forceClean: true` — same for `ac_clean: 1`, so the self-clean cycle runs after power off.
+- `forceScreenDisplay` — `none` (default), `forceOn` or `forceOff`; the forced value is sent with every command.
+
+Forced switches are exposed in HomeKit and Matter even when `featureSwitches` is empty, report the forced value, and ignore contradictory requests (logged). Models that never report the parameter are skipped with a single warning instead of spamming the log.
+
 ## v0.0.14-beta.1 - 2026-10-13
 
 ### feat(aux-home): experimental AUX Home provider (EU only)
