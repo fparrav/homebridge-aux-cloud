@@ -1,5 +1,14 @@
 # Changelog
 
+## v0.0.14-beta.3 - 2026-11-24
+
+### fix(platform): refine forced feature switches
+
+- **Breaking (beta only):** `forceClean` is removed. Self Clean is a cycle the unit runs by itself while off, so it is no longer forceable; use the regular switch (`featureSwitches: ["clean"]`). A leftover `forceClean` entry is ignored.
+- **New:** `forceHealth` injects `ac_health: 1` into commands that leave the unit on, never into a power-off command. It is a config option only and creates no extra switch.
+- **Fix:** forced switches (Mildew Proof, Screen Display) now ignore every request without sending a command, log the contrary ones and snap back to the forced value immediately in HomeKit and Matter. Previously an ignored Off still sent `mldprf: 1` to a running unit.
+- **Fix:** a Self Clean switch created by beta.2 is removed from the cached HomeKit accessory once it is no longer exposed.
+
 ## v0.0.14-beta.2 - 2026-11-24
 
 Per-device forced feature switches: `forceMildewProof`, `forceClean` and `forceScreenDisplay` (none/forceOn/forceOff). Mildew Proof and Self Clean are injected into every power-off command, the way the AUX Freedom app does; Screen Display is overridden on every command. See CHANGELOG for details.
