@@ -22,7 +22,7 @@ export type ScreenDisplayForceMode = 'none' | 'forceOn' | 'forceOff';
 
 export interface ForcedFeatureFlags {
   mildewProof: boolean;
-  clean: boolean;
+  health: boolean;
   screenDisplay: ScreenDisplayForceMode;
 }
 
@@ -74,7 +74,7 @@ export interface AuxCloudPlatformConfig extends PlatformConfig {
     controlStrategy?: 'local' | 'cloud';
     bridge?: 'HAP' | 'Matter';
     forceMildewProof?: boolean;
-    forceClean?: boolean;
+    forceHealth?: boolean;
     forceScreenDisplay?: ScreenDisplayForceMode;
   }>;
 }

@@ -1,17 +1,18 @@
 import type { Logger } from 'homebridge';
 
 import type { AuxDevice } from './api/AuxCloudClient';
-import { AC_CLEAN, AC_MILDEW_PROOF, AC_POWER, AC_SCREEN_DISPLAY } from './api/constants';
+import { AC_HEALTH, AC_MILDEW_PROOF, AC_POWER, AC_SCREEN_DISPLAY } from './api/constants';
 import type { AuxCloudPlatformConfig, ForcedFeatureFlags } from './types';
 
 /**
  * Per-device overrides for feature switches that HomeKit/Matter can otherwise
  * lose track of.
  *
- * mldprf (Mildew Proof) and ac_clean (Self Clean) are post-off cycles: the AUX
- * app only carries them in the payload that turns the unit off, so they are
- * injected into power-off commands. scrdisp (Screen Display) is a persistent
- * setting, so it is applied to every command.
+ * mldprf (Mildew Proof) is a post-off cycle: the AUX app only carries it in
+ * the payload that turns the unit off, so it is injected into power-off
+ * commands. ac_health (Health) is injected into every command while the unit
+ * stays on. scrdisp (Screen Display) is a persistent setting, so it is applied
+ * to every command.
  */
 export class ForcedFeatureRegistry {
   private readonly byEndpoint = new Map<string, ForcedFeatureFlags>();
@@ -52,6 +53,10 @@ export class ForcedFeatureRegistry {
 
     const reported = device.params ?? {};
     const turningOff = params[AC_POWER] === 0;
+    const unitOn =
+      typeof params[AC_POWER] === 'number'
+        ? params[AC_POWER] === 1
+        : device.params?.[AC_POWER] === 1;
     const result = { ...params };
 
     if (forced.mildewProof && turningOff) {
@@ -62,11 +67,11 @@ export class ForcedFeatureRegistry {
       }
     }
 
-    if (forced.clean && turningOff) {
-      if (typeof reported[AC_CLEAN] === 'number') {
-        result[AC_CLEAN] = 1;
+    if (forced.health && unitOn) {
+      if (typeof reported[AC_HEALTH] === 'number') {
+        result[AC_HEALTH] = 1;
       } else {
-        this.warnUnsupported(device, 'forceClean', AC_CLEAN);
+        this.warnUnsupported(device, 'forceHealth', AC_HEALTH);
       }
     }
 
@@ -89,11 +94,11 @@ export class ForcedFeatureRegistry {
           : 'none';
       const flags: ForcedFeatureFlags = {
         mildewProof: Boolean(device.forceMildewProof),
-        clean: Boolean(device.forceClean),
+        health: Boolean(device.forceHealth),
         screenDisplay,
       };
 
-      if (!flags.mildewProof && !flags.clean && flags.screenDisplay === 'none') {
+      if (!flags.mildewProof && !flags.health && flags.screenDisplay === 'none') {
         continue;
       }
 
@@ -126,4 +131,31 @@ export class ForcedFeatureRegistry {
       param,
     );
   }
+}
+
+/**
+ * Resolve the forced value a feature switch must report for a given parameter,
+ * or `undefined` when there is no forced override for it. `ac_health` is never
+ * resolved here: forceHealth only injects the value into outgoing commands and
+ * exposes no switch.
+ */
+export function resolveForcedValue(
+  flags: ForcedFeatureFlags,
+  param: string,
+): boolean | undefined {
+  if (param === AC_MILDEW_PROOF) {
+    return flags.mildewProof ? true : undefined;
+  }
+
+  if (param === AC_SCREEN_DISPLAY) {
+    if (flags.screenDisplay === 'forceOn') {
+      return true;
+    }
+    if (flags.screenDisplay === 'forceOff') {
+      return false;
+    }
+    return undefined;
+  }
+
+  return undefined;
 }

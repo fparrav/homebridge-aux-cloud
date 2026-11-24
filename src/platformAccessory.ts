@@ -39,6 +39,7 @@ import {
   AUX_MODE,
 } from './api/constants';
 import type { AuxDevice } from './api/AuxCloudClient';
+import { resolveForcedValue } from './forcedFeatures';
 import type { AuxCloudPlatform, FeatureSwitchKey } from './platform';
 import type { ForcedFeatureFlags } from './types';
 
@@ -50,7 +51,7 @@ interface AuxCloudAccessoryContext {
   };
 }
 
-const NO_FORCED_FEATURES: ForcedFeatureFlags = { mildewProof: false, clean: false, screenDisplay: 'none' };
+const NO_FORCED_FEATURES: ForcedFeatureFlags = { mildewProof: false, health: false, screenDisplay: 'none' };
 
 const MIN_TARGET_TEMPERATURE_C = 16;
 const MAX_TARGET_TEMPERATURE_C = 30;
@@ -362,14 +363,16 @@ export class AuxCloudPlatformAccessory {
 
     (Object.keys(FEATURE_SWITCH_CONFIG) as FeatureSwitchKey[]).forEach((feature) => {
       const definition = FEATURE_SWITCH_CONFIG[feature];
-      const forced = this.forcedValueForParam(definition.param);
+      const forced = resolveForcedValue(this.forcedFeatures, definition.param);
       const supported = typeof this.device?.params[definition.param] === 'number';
       const shouldExpose = supported && (this.featureSwitches.has(feature) || forced !== undefined);
-      const existing = this.featureSwitchServices.get(feature);
+      const existing =
+        this.featureSwitchServices.get(feature)
+        ?? this.accessory.getServiceById(this.platform.Service.Switch, feature);
 
       if (shouldExpose) {
-        const service = existing
-          ?? this.accessory.getServiceById(this.platform.Service.Switch, feature)
+        const service =
+          existing
           ?? this.accessory.addService(this.platform.Service.Switch, definition.label, feature);
 
         service.updateCharacteristic(this.platform.Characteristic.Name, definition.label);
@@ -802,18 +805,25 @@ export class AuxCloudPlatformAccessory {
     }
 
     const definition = FEATURE_SWITCH_CONFIG[feature];
-    let enabled = Boolean(value);
-    const forced = this.forcedValueForParam(definition.param);
+    const enabled = Boolean(value);
+    const forced = resolveForcedValue(this.forcedFeatures, definition.param);
 
-    if (forced !== undefined && enabled !== forced) {
-      this.platform.log.warn(
-        '%s is forced %s for %s by configuration; ignoring the %s request.',
-        definition.label,
-        forced ? 'on' : 'off',
-        this.accessory.displayName,
-        enabled ? 'On' : 'Off',
-      );
-      enabled = forced;
+    if (forced !== undefined) {
+      // Switch con valor forzado (Mildew Proof o Screen Display): toda petición,
+      // contraria o igual, se ignora sin enviar ningún comando ni tocar el estado
+      // optimista de params; el valor viaja solo vía ForcedFeatureRegistry.apply.
+      if (enabled !== forced) {
+        this.platform.log.warn(
+          '%s is forced %s for %s by configuration; ignoring the %s request.',
+          definition.label,
+          forced ? 'on' : 'off',
+          this.accessory.displayName,
+          enabled ? 'On' : 'Off',
+        );
+      }
+      // Restaura el estado del switch al valor forzado de inmediato.
+      this.updateCharacteristicsFromDevice();
+      return;
     }
 
     const payload = enabled ? definition.onPayload : definition.offPayload;
@@ -834,34 +844,12 @@ export class AuxCloudPlatformAccessory {
     }
 
     const definition = FEATURE_SWITCH_CONFIG[feature];
-    const forced = this.forcedValueForParam(definition.param);
+    const forced = resolveForcedValue(this.forcedFeatures, definition.param);
     if (forced !== undefined) {
       return forced;
     }
 
     return this.device.params[definition.param] === 1;
-  }
-
-  /**
-   * Config override for a feature: true/false when the config forces it,
-   * undefined when the switch behaves normally.
-   */
-  private forcedValueForParam(param: string): boolean | undefined {
-    if (param === AC_MILDEW_PROOF) {
-      return this.forcedFeatures.mildewProof ? true : undefined;
-    }
-    if (param === AC_CLEAN) {
-      return this.forcedFeatures.clean ? true : undefined;
-    }
-    if (param === AC_SCREEN_DISPLAY) {
-      if (this.forcedFeatures.screenDisplay === 'forceOn') {
-        return true;
-      }
-      if (this.forcedFeatures.screenDisplay === 'forceOff') {
-        return false;
-      }
-    }
-    return undefined;
   }
 
   // ------------------------------------------------------------------

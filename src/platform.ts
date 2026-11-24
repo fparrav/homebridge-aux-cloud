@@ -59,7 +59,7 @@ export interface AuxCloudPlatformConfig extends PlatformConfig {
     enableHAP?: boolean;
     enableMatter?: boolean;
     forceMildewProof?: boolean;
-    forceClean?: boolean;
+    forceHealth?: boolean;
     forceScreenDisplay?: ScreenDisplayForceMode;
    }>;
 }

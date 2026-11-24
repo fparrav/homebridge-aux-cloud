@@ -218,11 +218,11 @@
                             "default": false,
                             "description": "Always send mldprf=1 in the command that turns this device off, the same way the AC Freedom app does. The Mildew Proof switch is also exposed for this device and reports On; turning it off is ignored."
                         },
-                        "forceClean": {
-                            "title": "Force Self Clean",
+                        "forceHealth": {
+                            "title": "Force Health",
                             "type": "boolean",
                             "default": false,
-                            "description": "Always send ac_clean=1 in the command that turns this device off so the self-clean cycle runs after power off. The Self Clean switch is exposed for this device and reports On; turning it off is ignored."
+                            "description": "Sends ac_health=1 on every command while the unit is on. It adds no extra switch; the regular Health switch is still controlled by featureSwitches."
                         },
                         "forceScreenDisplay": {
                             "title": "Force Screen Display",

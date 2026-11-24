@@ -34,6 +34,7 @@ import {
   AuxFanSpeed,
   AuxProducts,
 } from './api/constants';
+import { resolveForcedValue } from './forcedFeatures';
 import type { FeatureSwitchKey, ForcedFeatureFlags, IAuxCloudPlatform } from './types';
 import type { AuxDevice } from './api/AuxCloudClient';
 
@@ -72,7 +73,7 @@ const THERMOSTAT_MODE_HEAT = 4;
 const THERMOSTAT_MODE_DRY = 6; // 6 = Precooling / dehumidification → Dry
 const THERMOSTAT_MODE_FAN_ONLY = 7; // 7 = Fan Only
 
-const NO_FORCED_FEATURES: ForcedFeatureFlags = { mildewProof: false, clean: false, screenDisplay: 'none' };
+const NO_FORCED_FEATURES: ForcedFeatureFlags = { mildewProof: false, health: false, screenDisplay: 'none' };
 
 export class MatterThermostatAccessory {
   private readonly api: API;
@@ -415,7 +416,7 @@ export class MatterThermostatAccessory {
     ];
 
     for (const m of mappings) {
-      const forcedValue = this.forcedValueForParam(m.param);
+      const forcedValue = resolveForcedValue(this.forcedFeatures, m.param);
       if (!featureSwitches.has(m.key as FeatureSwitchKey) && forcedValue === undefined) continue;
       const supported = typeof this.device?.params?.[m.param] === 'number';
       if (!supported) continue;
@@ -437,7 +438,7 @@ export class MatterThermostatAccessory {
         },
         handlers: {
           onOff: {
-            onOffSet: async (request: { onOff: number }) => this.handleSwitchSet(m.key, m.onPayload, m.offPayload, request),
+            onOffSet: async (request: { onOff: number }) => this.handleSwitchSet(m.key, m.param, m.onPayload, m.offPayload, request),
           },
         },
       } as MatterAccessoryConfig);
@@ -448,42 +449,40 @@ export class MatterThermostatAccessory {
 
   private getSwitchState(param: string): number {
     if (!this.device) return 0;
-    const forced = this.forcedValueForParam(param);
+    const forced = resolveForcedValue(this.forcedFeatures, param);
     if (forced !== undefined) return forced ? 1 : 0;
     const val = this.device.params?.[param];
     return val === 1 ? 1 : 0;
   }
 
-  /**
-   * Config override for a feature: true/false when the config forces it,
-   * undefined when the switch behaves normally.
-   */
-  private forcedValueForParam(param: string): boolean | undefined {
-    if (param === AC_MILDEW_PROOF) return this.forcedFeatures.mildewProof ? true : undefined;
-    if (param === AC_CLEAN) return this.forcedFeatures.clean ? true : undefined;
-    if (param === AC_SCREEN_DISPLAY) {
-      if (this.forcedFeatures.screenDisplay === 'forceOn') return true;
-      if (this.forcedFeatures.screenDisplay === 'forceOff') return false;
-    }
-    return undefined;
-  }
-
   private async handleSwitchSet(
     key: string,
+    param: string,
     onPayload: Record<string, number>,
     offPayload: Record<string, number>,
     request: { onOff: number },
   ): Promise<void> {
     if (!this.device) return;
     const requestedOn = request.onOff === 1;
-    const forced = this.forcedValueForParam(Object.keys(onPayload)[0]);
-    let payload = requestedOn ? onPayload : offPayload;
-    if (forced !== undefined && requestedOn !== forced) {
-      this.log.warn(
-        `[Matter][${this.device.friendlyName}] ${key} is forced ${forced ? 'on' : 'off'} by configuration; ignoring the ${requestedOn ? 'ON' : 'OFF'} request`,
-      );
-      payload = forced ? onPayload : offPayload;
+    const forced = resolveForcedValue(this.forcedFeatures, param);
+
+    if (forced !== undefined) {
+      // Switch con valor forzado (Mildew Proof o Screen Display): toda petición,
+      // contraria o igual, se ignora sin enviar ningún comando; el valor viaja
+      // solo vía ForcedFeatureRegistry.apply.
+      if (requestedOn !== forced) {
+        this.log.warn(
+          `[Matter][${this.device.friendlyName}] ${key} is forced ${forced ? 'on' : 'off'} by configuration; ignoring the ${requestedOn ? 'ON' : 'OFF'} request`,
+        );
+      }
+      // Restaura el valor forzado de inmediato, sin esperar al siguiente poll.
+      // Mismo UUID que getMatterSwitchAccessories() para este switch.
+      const uuid = this.api.matter.uuid.generate(`matter-switch-${this.endpointId}-${key}`);
+      await this.api.matter.updateAccessoryState(uuid, 'onOff', { onOff: forced ? 1 : 0 }).catch(() => {});
+      return;
     }
+
+    const payload = requestedOn ? onPayload : offPayload;
     this.log.info(`[Matter][${this.device.friendlyName}] Switch ${key}: ${requestedOn ? 'ON' : 'OFF'}`);
     await this.sendCommand(payload);
   }

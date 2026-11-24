@@ -1,7 +1,6 @@
 import type { API, CharacteristicValue, PlatformAccessory, PlatformConfig } from 'homebridge';
 
 import type { AuxDevice } from '../api/AuxCloudClient';
-import { AC_CLEAN, AC_MILDEW_PROOF, AC_SCREEN_DISPLAY } from '../api/constants';
 import { AuxCloudHAPPlatform } from '../Platform.HAP';
 import type { AuxCloudPlatform } from '../platform';
 import { AuxCloudPlatformAccessory } from '../platformAccessory';
@@ -15,6 +14,7 @@ const UNSUPPORTED_ENDPOINT = 'unsupported-ac';
 const FORCED_MAC = '02:00:00:00:00:01';
 
 const AC_PARAMS = { pwr: 1, temp: 240, mldprf: 0, ac_clean: 0, scrdisp: 0, ac_mode: 1 };
+const AC_PARAMS_WITH_HEALTH = { ...AC_PARAMS, ac_health: 0 };
 
 type SwitchHandler = (request: { onOff: number }) => Promise<void>;
 
@@ -112,17 +112,17 @@ describe('forced features: platform', () => {
 
   test('injects the forced features into the power-off command', async () => {
     const { platform, provider } = makeHapPlatform([
-      { endpointId: FORCED_ENDPOINT, forceMildewProof: true, forceClean: true },
+      { endpointId: FORCED_ENDPOINT, forceMildewProof: true },
     ]);
 
     await platform.sendDeviceParamsWithRetry(makeDevice(FORCED_ENDPOINT, AC_PARAMS), { pwr: 0 });
 
-    expect(provider.setDeviceParams.mock.calls[0][1]).toEqual({ pwr: 0, mldprf: 1, ac_clean: 1 });
+    expect(provider.setDeviceParams.mock.calls[0][1]).toEqual({ pwr: 0, mldprf: 1 });
   });
 
   test('does not inject post-off features into commands that keep the unit on', async () => {
     const { platform, provider } = makeHapPlatform([
-      { endpointId: FORCED_ENDPOINT, forceMildewProof: true, forceClean: true },
+      { endpointId: FORCED_ENDPOINT, forceMildewProof: true },
     ]);
 
     await platform.sendDeviceParamsWithRetry(makeDevice(FORCED_ENDPOINT, AC_PARAMS), { ac_mode: 1, temp: 250 });
@@ -174,6 +174,75 @@ describe('forced features: platform', () => {
     expect(log.warn.mock.calls.length).toBe(2);
     expect(String(log.warn.mock.calls[0][1])).toBe('forceMildewProof');
     expect(String(log.warn.mock.calls[1][1])).toBe('forceScreenDisplay');
+  });
+
+  test('injects ac_health into a temperature change while the unit is on', async () => {
+    const { platform, provider } = makeHapPlatform([
+      { endpointId: FORCED_ENDPOINT, forceHealth: true },
+    ]);
+
+    await platform.sendDeviceParamsWithRetry(makeDevice(FORCED_ENDPOINT, AC_PARAMS_WITH_HEALTH), { temp: 250 });
+
+    // Cloud commands always carry the current power state (existing behaviour).
+    expect(provider.setDeviceParams.mock.calls[0][1]).toEqual({ pwr: 1, temp: 250, ac_health: 1 });
+  });
+
+  test('does not inject ac_health into a power-off command', async () => {
+    const { platform, provider } = makeHapPlatform([
+      { endpointId: FORCED_ENDPOINT, forceHealth: true },
+    ]);
+
+    await platform.sendDeviceParamsWithRetry(makeDevice(FORCED_ENDPOINT, AC_PARAMS_WITH_HEALTH), { pwr: 0 });
+
+    expect(provider.setDeviceParams.mock.calls[0][1]).toEqual({ pwr: 0 });
+  });
+
+  test('does not inject ac_health while the unit is off', async () => {
+    const { platform, provider } = makeHapPlatform([
+      { endpointId: FORCED_ENDPOINT, forceHealth: true },
+    ]);
+    const device = makeDevice(FORCED_ENDPOINT, { ...AC_PARAMS_WITH_HEALTH, pwr: 0 });
+
+    await platform.sendDeviceParamsWithRetry(device, { temp: 250 });
+
+    expect(provider.setDeviceParams.mock.calls[0][1]).toEqual({ pwr: 0, temp: 250 });
+  });
+
+  test('injects ac_health when turning the unit on', async () => {
+    const { platform, provider } = makeHapPlatform([
+      { endpointId: FORCED_ENDPOINT, forceHealth: true },
+    ]);
+    const device = makeDevice(FORCED_ENDPOINT, { ...AC_PARAMS_WITH_HEALTH, pwr: 0 });
+
+    await platform.sendDeviceParamsWithRetry(device, { pwr: 1 });
+
+    expect(provider.setDeviceParams.mock.calls[0][1]).toEqual({ pwr: 1, ac_health: 1 });
+  });
+
+  test('warns once for a device that does not report ac_health', async () => {
+    const { log, platform, provider } = makeHapPlatform([
+      { endpointId: UNSUPPORTED_ENDPOINT, forceHealth: true },
+    ]);
+    const device = makeDevice(UNSUPPORTED_ENDPOINT, { pwr: 1, temp: 210, ac_mode: 1 });
+
+    await platform.sendDeviceParamsWithRetry(device, { temp: 220 });
+    await platform.sendDeviceParamsWithRetry(device, { temp: 230 });
+
+    expect(provider.setDeviceParams.mock.calls[0][1]).toEqual({ pwr: 1, temp: 220 });
+    expect(provider.setDeviceParams.mock.calls[1][1]).toEqual({ pwr: 1, temp: 230 });
+    expect(log.warn.mock.calls.length).toBe(1);
+    expect(String(log.warn.mock.calls[0][1])).toBe('forceHealth');
+  });
+
+  test('ignores a legacy forceClean entry without injecting ac_clean', async () => {
+    const legacyDevices = [
+      { endpointId: FORCED_ENDPOINT, forceClean: true },
+    ] as unknown as PlatformConfig['devices'];
+    const { platform, provider } = makeHapPlatform(legacyDevices);
+
+    await platform.sendDeviceParamsWithRetry(makeDevice(FORCED_ENDPOINT, AC_PARAMS), { pwr: 0 });
+
+    expect(provider.setDeviceParams.mock.calls[0][1]).toEqual({ pwr: 0 });
   });
 });
 
@@ -232,7 +301,11 @@ class FakeService {
   }
 }
 
-function makeHapHarness(forcedFeatures: Record<string, unknown>, params: Record<string, number>) {
+function makeHapHarness(
+  forcedFeatures: Record<string, unknown>,
+  params: Record<string, number>,
+  cachedServices: Record<string, FakeService> = {},
+) {
   const Service = {
     AccessoryInformation: { UUID: 'accessory-info' },
     HeaterCooler: { UUID: 'heater-cooler' },
@@ -256,7 +329,14 @@ function makeHapHarness(forcedFeatures: Record<string, unknown>, params: Record<
     On: { UUID: 'on' },
   } as unknown as AuxCloudHAPPlatform['Characteristic'];
 
-  const services = new Map<string, FakeService>();
+  const services = new Map<string, FakeService>(Object.entries(cachedServices));
+  const removeService = jest.fn((service: FakeService) => {
+    for (const [key, value] of services.entries()) {
+      if (value === service) {
+        services.delete(key);
+      }
+    }
+  });
   const accessory = {
     UUID: `uuid-${FORCED_ENDPOINT}`,
     displayName: 'Forced AC',
@@ -268,20 +348,15 @@ function makeHapHarness(forcedFeatures: Record<string, unknown>, params: Record<
       services.set(`${service.UUID}:${id ?? service.UUID}`, created);
       return created;
     },
-    removeService: (service: FakeService) => {
-      for (const [key, value] of services.entries()) {
-        if (value === service) {
-          services.delete(key);
-        }
-      }
-    },
+    removeService,
   } as unknown as PlatformAccessory;
 
   const startDeviceCommand = jest.fn();
+  const log = { debug: jest.fn(), info: jest.fn(), warn: jest.fn(), error: jest.fn() };
   const platform = {
     Service,
     Characteristic,
-    log: { debug: jest.fn(), info: jest.fn(), warn: jest.fn(), error: jest.fn() },
+    log,
     api: { hap: { uuid: { generate: (id: string) => `uuid-${id}` } } },
     temperatureUnit: 'C',
     temperatureStep: 0.5,
@@ -290,7 +365,7 @@ function makeHapHarness(forcedFeatures: Record<string, unknown>, params: Record<
     commandRetryCount: 2,
     getForcedFeatures: () => ({
       mildewProof: false,
-      clean: false,
+      health: false,
       screenDisplay: 'none',
       ...forcedFeatures,
     }),
@@ -303,7 +378,7 @@ function makeHapHarness(forcedFeatures: Record<string, unknown>, params: Record<
   const handler = new AuxCloudPlatformAccessory(platform, accessory);
   handler.updateAccessory(makeDevice(FORCED_ENDPOINT, params));
 
-  return { accessory, handler, startDeviceCommand, services };
+  return { accessory, handler, startDeviceCommand, services, removeService, log };
 }
 
 function switchOnCharacteristic(services: Map<string, FakeService>, key: string): FakeCharacteristic | undefined {
@@ -320,14 +395,26 @@ describe('forced features: HAP accessory', () => {
     expect(on!.getHandler!()).toBe(true);
   });
 
-  test('ignores an Off request while Mildew Proof is forced', () => {
-    const { services, startDeviceCommand } = makeHapHarness({ mildewProof: true }, AC_PARAMS);
+  test('ignores an Off request while Mildew Proof is forced and warns once', () => {
+    const { services, startDeviceCommand, log } = makeHapHarness({ mildewProof: true }, AC_PARAMS);
     const on = switchOnCharacteristic(services, 'mildewProof')!;
 
     on.setHandler!(false);
 
-    expect(startDeviceCommand.mock.calls[0][1]).toEqual({ mldprf: 1 });
+    expect(startDeviceCommand).not.toHaveBeenCalled();
     expect(on.value).toBe(true);
+    expect(log.warn).toHaveBeenCalledTimes(1);
+  });
+
+  test('ignores an On request while Mildew Proof is forced without warning', () => {
+    const { services, startDeviceCommand, log } = makeHapHarness({ mildewProof: true }, AC_PARAMS);
+    const on = switchOnCharacteristic(services, 'mildewProof')!;
+
+    on.setHandler!(true);
+
+    expect(startDeviceCommand).not.toHaveBeenCalled();
+    expect(on.value).toBe(true);
+    expect(log.warn).not.toHaveBeenCalled();
   });
 
   test('reports Screen Display off when forceScreenDisplay is forceOff', () => {
@@ -338,7 +425,7 @@ describe('forced features: HAP accessory', () => {
 
     on.setHandler!(true);
 
-    expect(startDeviceCommand.mock.calls[0][1]).toEqual({ scrdisp: 0 });
+    expect(startDeviceCommand).not.toHaveBeenCalled();
     expect(on.value).toBe(false);
   });
 
@@ -350,7 +437,8 @@ describe('forced features: HAP accessory', () => {
 
     on.setHandler!(false);
 
-    expect(startDeviceCommand.mock.calls[0][1]).toEqual({ scrdisp: 1 });
+    expect(startDeviceCommand).not.toHaveBeenCalled();
+    expect(on.value).toBe(true);
   });
 
   test('does not expose a switch for a device without forced features', () => {
@@ -358,6 +446,45 @@ describe('forced features: HAP accessory', () => {
 
     expect(switchOnCharacteristic(services, 'mildewProof')).toBeUndefined();
     expect(switchOnCharacteristic(services, 'screenDisplay')).toBeUndefined();
+  });
+
+  test('does not expose a Health switch for forceHealth alone', () => {
+    const { services } = makeHapHarness({ health: true }, AC_PARAMS_WITH_HEALTH);
+
+    expect(switchOnCharacteristic(services, 'health')).toBeUndefined();
+    expect(switchOnCharacteristic(services, 'mildewProof')).toBeUndefined();
+    expect(switchOnCharacteristic(services, 'screenDisplay')).toBeUndefined();
+  });
+
+  test('removes a cached Self Clean switch that is no longer exposed', () => {
+    const cachedClean = new FakeService();
+    const { removeService, services } = makeHapHarness({}, AC_PARAMS, { 'switch:clean': cachedClean });
+
+    expect(removeService).toHaveBeenCalledTimes(1);
+    expect(removeService).toHaveBeenCalledWith(cachedClean);
+    expect(services.has('switch:clean')).toBe(false);
+  });
+
+  test('removes a cached switch when the device does not report the parameter', () => {
+    const cachedClean = new FakeService();
+    const paramsWithoutClean = { pwr: 1, temp: 240, mldprf: 0, scrdisp: 0, ac_mode: 1 };
+    const { removeService } = makeHapHarness({}, paramsWithoutClean, { 'switch:clean': cachedClean });
+
+    expect(removeService).toHaveBeenCalledTimes(1);
+    expect(removeService).toHaveBeenCalledWith(cachedClean);
+  });
+
+  test('keeps a cached switch service when the feature is still exposed', () => {
+    const cachedMildew = new FakeService();
+    const { removeService, services } = makeHapHarness(
+      { mildewProof: true },
+      AC_PARAMS,
+      { 'switch:mildewProof': cachedMildew },
+    );
+
+    expect(removeService).not.toHaveBeenCalled();
+    expect(services.get('switch:mildewProof')).toBe(cachedMildew);
+    expect(switchOnCharacteristic(services, 'mildewProof')?.value).toBe(true);
   });
 });
 
@@ -367,22 +494,25 @@ describe('forced features: HAP accessory', () => {
 
 function makeMatterHarness(forcedFeatures: Record<string, unknown>, params: Record<string, number>) {
   const startDeviceCommand = jest.fn();
+  const updateAccessoryState = jest.fn().mockResolvedValue(undefined);
+  const log = { info: jest.fn(), debug: jest.fn(), warn: jest.fn(), error: jest.fn() };
   const platform = {
     api: {
       matter: {
         uuid: { generate: (id: string) => `uuid-${id}` },
         deviceTypes: { Thermostat: 'Thermostat', OnOffSwitch: 'OnOffSwitch' },
+        updateAccessoryState,
       },
       packageJSON: { version: '0.0.0-test' },
     },
-    log: { info: jest.fn(), debug: jest.fn(), warn: jest.fn(), error: jest.fn() },
+    log,
     featureSwitches: new Set<string>(),
     commandTimeoutMs: 5000,
     commandRetryCount: 3,
     redactDeviceIdentifiers: false,
     getForcedFeatures: () => ({
       mildewProof: false,
-      clean: false,
+      health: false,
       screenDisplay: 'none',
       ...forcedFeatures,
     }),
@@ -395,6 +525,8 @@ function makeMatterHarness(forcedFeatures: Record<string, unknown>, params: Reco
   return {
     accessory: new MatterThermostatAccessory(platform, makeDevice(FORCED_ENDPOINT, params)),
     startDeviceCommand,
+    updateAccessoryState,
+    log,
   };
 }
 
@@ -415,15 +547,50 @@ describe('forced features: Matter accessory', () => {
     expect(switchOnOff(display!)).toBe(0);
   });
 
-  test('an Off request on a forced switch sends the forced payload', async () => {
-    const { accessory, startDeviceCommand } = makeMatterHarness({ mildewProof: true }, AC_PARAMS);
+  test('an Off request on a forced switch sends no command and restores the forced state', async () => {
+    const { accessory, startDeviceCommand, updateAccessoryState } = makeMatterHarness({ mildewProof: true }, AC_PARAMS);
     const switches = accessory.getMatterSwitchAccessories();
     const mildew = switches.find((config) => config.displayName === 'Mildew Proof');
     const handlers = mildew!.handlers as Record<string, Record<string, SwitchHandler>>;
 
     await handlers.onOff.onOffSet({ onOff: 0 });
 
-    expect(startDeviceCommand.mock.calls[0][1]).toEqual({ mldprf: 1 });
+    expect(startDeviceCommand).not.toHaveBeenCalled();
+    expect(updateAccessoryState).toHaveBeenCalledWith(
+      `uuid-matter-switch-${FORCED_ENDPOINT}-mildewProof`,
+      'onOff',
+      { onOff: 1 },
+    );
+    expect(switchOnOff(mildew!)).toBe(1);
+  });
+
+  test('an On request on a forceOff Screen Display sends no command and restores the forced state', async () => {
+    const { accessory, startDeviceCommand, updateAccessoryState } = makeMatterHarness({ screenDisplay: 'forceOff' }, AC_PARAMS);
+    const switches = accessory.getMatterSwitchAccessories();
+    const display = switches.find((config) => config.displayName === 'Screen Display');
+    const handlers = display!.handlers as Record<string, Record<string, SwitchHandler>>;
+
+    await handlers.onOff.onOffSet({ onOff: 1 });
+
+    expect(startDeviceCommand).not.toHaveBeenCalled();
+    expect(updateAccessoryState).toHaveBeenCalledWith(
+      `uuid-matter-switch-${FORCED_ENDPOINT}-screenDisplay`,
+      'onOff',
+      { onOff: 0 },
+    );
+    expect(switchOnOff(display!)).toBe(0);
+  });
+
+  test('an equal request on a forced switch sends no command and no warning', async () => {
+    const { accessory, startDeviceCommand, log } = makeMatterHarness({ mildewProof: true }, AC_PARAMS);
+    const switches = accessory.getMatterSwitchAccessories();
+    const mildew = switches.find((config) => config.displayName === 'Mildew Proof');
+    const handlers = mildew!.handlers as Record<string, Record<string, SwitchHandler>>;
+
+    await handlers.onOff.onOffSet({ onOff: 1 });
+
+    expect(startDeviceCommand).not.toHaveBeenCalled();
+    expect(log.warn).not.toHaveBeenCalled();
   });
 
   test('does not register switches for a device without forced features', () => {
@@ -432,19 +599,9 @@ describe('forced features: Matter accessory', () => {
     expect(accessory.getMatterSwitchAccessories().length).toBe(0);
   });
 
-  test('ignores an Off request on a forced switch and leaves the other switches alone', async () => {
-    const { accessory, startDeviceCommand } = makeMatterHarness({ clean: true }, AC_PARAMS);
-    const switches = accessory.getMatterSwitchAccessories();
-    const mildew = switches.find((config) => config.displayName === 'Mildew Proof');
+  test('does not register a Health switch for forceHealth alone', () => {
+    const { accessory } = makeMatterHarness({ health: true }, AC_PARAMS_WITH_HEALTH);
 
-    expect(mildew).toBeUndefined();
-    expect(switches.length).toBe(1);
-
-    const handlers = (switches[0].handlers as Record<string, Record<string, SwitchHandler>>).onOff;
-    await handlers.onOffSet({ onOff: 0 });
-
-    expect(startDeviceCommand.mock.calls[0][1]).toEqual({ [AC_CLEAN]: 1 });
-    expect(startDeviceCommand.mock.calls[0][1]).not.toHaveProperty(AC_MILDEW_PROOF);
-    expect(startDeviceCommand.mock.calls[0][1]).not.toHaveProperty(AC_SCREEN_DISPLAY);
+    expect(accessory.getMatterSwitchAccessories().length).toBe(0);
   });
 });
